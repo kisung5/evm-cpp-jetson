@@ -72,7 +72,7 @@ Copyright 1984, 1995, 2000 by Stephen L. Moshier
 
 //#ifdef ANSIPROT
 extern double fabs ( double );
-extern double cabs ( cmplx * );
+extern double cabs_e ( cmplx * );
 extern double sqrt ( double );
 extern double atan2 ( double, double );
 extern double cos ( double );
@@ -84,7 +84,7 @@ extern double ldexp ( double, int );
 //void cdiv ( cmplx *, cmplx *, cmplx * );
 //void cadd ( cmplx *, cmplx *, cmplx * );
 //#else
-//double fabs(), cabs(), sqrt(), atan2(), cos(), sin();
+//double fabs(), cabs_e(), sqrt(), atan2(), cos(), sin();
 //double sqrt(), frexp(), ldexp();
 //int isnan();
 //void cdiv(), cadd();
@@ -183,7 +183,7 @@ void cneg(register cmplx* a)
 	a->i = -a->i;
 }
 
-/*							cabs()
+/*							cabs_e()
  *
  *	Complex absolute value
  *
@@ -191,11 +191,11 @@ void cneg(register cmplx* a)
  *
  * SYNOPSIS:
  *
- * double cabs();
+ * double cabs_e();
  * cmplx z;
  * double a;
  *
- * a = cabs( &z );
+ * a = cabs_e( &z );
  *
  *
  *
@@ -258,13 +258,13 @@ typedef struct
 #endif
 
 
-double cabs(register cmplx* z)
+double cabs_e(register cmplx* z)
 {
 	double x, y, b, re, im;
 	int ex, ey, e;
 
 	#ifdef INFINITIES
-	/* Note, cabs(INFINITY,NAN) = INFINITY. */
+	/* Note, cabs_e(INFINITY,NAN) = INFINITY. */
 	if( z->r == INFINITY || z->i == INFINITY
 	   || z->r == -INFINITY || z->i == -INFINITY )
 	  return( INFINITY );
@@ -313,7 +313,7 @@ double cabs(register cmplx* z)
 	/* Check it for overflow and underflow. */
 	if( ey > MAXEXP )
 		{
-		mtherr( "cabs", 3 );
+		mtherr( "cabs_e", 3 );
 		return( INFINITY );
 		}
 	if( ey < MINEXP )
@@ -323,7 +323,7 @@ double cabs(register cmplx* z)
 	b = ldexp( b, e );
 	return( b );
 }
-/*							csqrt()
+/*							c_sqrt()
  *
  *	Complex square root
  *
@@ -331,10 +331,10 @@ double cabs(register cmplx* z)
  *
  * SYNOPSIS:
  *
- * void csqrt();
+ * void c_sqrt();
  * cmplx z, w;
  *
- * csqrt( &z, &w );
+ * c_sqrt( &z, &w );
  *
  *
  *
@@ -366,11 +366,11 @@ double cabs(register cmplx* z)
  *    IEEE      -10,+10    100000       3.2e-16     7.7e-17
  *
  *                        2
- * Also tested by csqrt( z ) = z, and tested by arguments
+ * Also tested by c_sqrt( z ) = z, and tested by arguments
  * close to the real axis.
  */
 
-void csqrt(	cmplx* z, cmplx *w)
+void c_sqrt(	cmplx* z, cmplx *w)
 {
 	cmplx q, s;
 	double x, y, r, t;
@@ -417,7 +417,7 @@ void csqrt(	cmplx* z, cmplx *w)
 		}
 	else
 		{
-		r = cabs(z);
+		r = cabs_e(z);
 		t = 0.5*(r - x);
 		}
 
@@ -438,5 +438,5 @@ cmplx z;
 
 z.r = x;
 z.i = y;
-return( cabs(&z) );
+return( cabs_e(&z) );
 }

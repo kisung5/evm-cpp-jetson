@@ -234,64 +234,8 @@ int spln()
 		++j;
 		b = zs[j];
 		++j;
-		//printf( "%.9E %.9E\n", a, b );
-		//if( i == np-1 )
-			//printf( "s plane zeros:\n" );
 		}
 	return 0;
-}
-
-
-/*		cay()
- *
- * Find parameter corresponding to given nome by expansion
- * in theta functions:
- * AMS55 #16.38.5, 16.38.7
- *
- *       1/2
- * ( 2K )                   4     9
- * ( -- )     =  1 + 2q + 2q  + 2q  + ...  =  Theta (0,q)
- * ( pi )                                          3
- *
- *
- *       1/2
- * ( 2K )     1/4       1/4        2    6    12    20
- * ( -- )    m     =  2q    ( 1 + q  + q  + q   + q   + ...) = Theta (0,q)
- * ( pi )                                                           2
- *
- * The nome q(m) = exp( - pi K(1-m)/K(m) ).
- *
- *                                1/2
- * Given q, this program returns m   .
- */
-double cay(double q)
-{
-	double a, b, p, r;
-	double t1, t2;
-
-	a = 1.0;
-	b = 1.0;
-	r = 1.0;
-	p = q;
-
-	do
-	{
-		r *= p;
-		a += 2.0 * r;
-		t1 = fabs( r/a );
-
-		r *= p;
-		b += r;
-		p *= q;
-		t2 = fabs( r/b );
-		if( t2 > t1 )
-			t1 = t2;
-	}
-	while( t1 > MACHEP );
-
-	a = b/a;
-	a = 4.0 * sqrt(q) * a * a;	/* see above formulas, solved for m */
-	return(a);
 }
 
 
@@ -384,7 +328,7 @@ int zplna()
 					cb.i = 0.0;
 					cmul( &cb, &cb, &cnum );     /* b^2 */
 					csub( &b4ac, &cnum, &b4ac ); /* b^2 - 4 ac */
-					csqrt( &b4ac, &b4ac );
+					c_sqrt( &b4ac, &b4ac );
 					cb.r = -cb.r;  /* -b */
 					cb.i = -cb.i;
 					ca.r *= 2.0; /* 2a */

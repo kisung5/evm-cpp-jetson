@@ -8,13 +8,13 @@
 using namespace std;
 using namespace cv;
 
-int main() {
+int main(int argc, const char* argv[]) {
 
-    //if (argc != 2)
-    //{
+    // if (argc != 3)
+    // {
     //    printf("usage: DisplayImage.out <Image_Path>\n");
     //    return -1;
-    //}
+    // }
     //Mat image;
     //image = imread(argv[1], 1);
     //if (!image.data)
@@ -26,7 +26,7 @@ int main() {
     //imshow("Display Image", image);
     //waitKey(0);
 
-    cout << "Cuda #N" << cuda::getCudaEnabledDeviceCount() << endl;
+    cout << "Cuda #N " << cuda::getCudaEnabledDeviceCount() << endl;
 
     string dataDir = "./vid/";
     string resultsDir = "./Results/";
