@@ -1,3 +1,6 @@
+#ifndef EVM_CPP_H
+#define EVM_CPP_H
+
 #pragma once
 
 #include <iostream>
@@ -46,3 +49,4 @@ vector<Mat> ideal_bandpassing(vector<Mat> input, int dim, double wl, double wh, 
 
 vector<vector<Mat>> ideal_bandpassing_lpyr(vector<vector<Mat>>& input, int dim, double wl, double wh, double samplingRate);
 
+#endif /* EVM_CPP_H */
