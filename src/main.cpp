@@ -1,4 +1,5 @@
 #include <iostream>
+#include <omp.h>
 #include <opencv2/core/core.hpp>
 #include <opencv2/core/utils/filesystem.hpp>
 #include <opencv2/core/cuda.hpp>
@@ -10,23 +11,24 @@ using namespace cv;
 
 int main(int argc, const char* argv[]) {
 
-    // if (argc != 3)
-    // {
-    //    printf("usage: DisplayImage.out <Image_Path>\n");
-    //    return -1;
-    // }
+    if (argc != 10 && argc != 1)
+    {
+       cout << "usage: evm-cpp-linux <input_file> <result_dir> <method> <alpha> <level/lambda_c>";
+       cout << " <fl/r1> <fh/r2> <sampling_rate> <chrom_attenuation>" << endl;
+       return -1;
+    }
+
+    cout << "Cuda #N " << cuda::getCudaEnabledDeviceCount() << endl;
+
+    cout << "OpenMP Max Threads: " <<  omp_get_max_threads() << endl;
+    
     //Mat image;
     //image = imread(argv[1], 1);
     //if (!image.data)
     //{
     //    printf("No image data \n");
     //    return -1;
-    //}
-    //namedWindow("Display Image", WINDOW_AUTOSIZE);
-    //imshow("Display Image", image);
-    //waitKey(0);
-
-    cout << "Cuda #N " << cuda::getCudaEnabledDeviceCount() << endl;
+    //}  
 
     string dataDir = "./vid/";
     string resultsDir = "./Results/";
@@ -63,12 +65,12 @@ int main(int argc, const char* argv[]) {
     int status11 = amplify_spatial_lpyr_temporal_ideal(dataDir + "guitar.mp4", resultsDir,
         100, 10, 100.0f, 120.0f, 600, 0);
     // IIR
-    int status12 = amplify_spatial_lpyr_temporal_iir(dataDir + "baby.mp4", resultsDir,
-        10, 16, 0.4f, 0.05f, 0.1f);
-    int status13 = amplify_spatial_lpyr_temporal_iir(dataDir + "wrist.mp4", resultsDir, 
-        10, 16, 0.4, 0.05, 0.1);
+    // int status12 = amplify_spatial_lpyr_temporal_iir(dataDir + "baby.mp4", resultsDir,
+    //     10, 16, 0.4f, 0.05f, 0.1f);
+    // int status13 = amplify_spatial_lpyr_temporal_iir(dataDir + "wrist.mp4", resultsDir, 
+    //     10, 16, 0.4, 0.05, 0.1);
     int status = status1 + status2 + status3 + status4 + status5 + status6 + status7 + status8 +
-        status9 + status10 + status11 + status12 + status13;
+        status9 + status10 + status11 /*+ status12 + status13*/;
     
     if (status < 0) {
         return -1;

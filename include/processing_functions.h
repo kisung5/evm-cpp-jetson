@@ -15,17 +15,17 @@ Video processing functions
 
 // Color Magnification
 int amplify_spatial_Gdown_temporal_ideal(string inFile, string outDir, double alpha, int level, 
-	double f1, double fh, int samplingRate, double chromAttenuation);
+	double fl, double fh, int samplingRate, double chromAttenuation);
 
 // Motion Magnification
 int amplify_spatial_lpyr_temporal_butter(string inFile, string outDir, double alpha, double lambda_c,
 	double fl, double fh, int samplingRate, double chromAttenuation);
 
-int amplify_spatial_lpyr_temporal_ideal(string inFile, string outDir, double alpha,
-    double lambda_c, double fl, double fh, double samplingRate, double chromAttenuation);
+int amplify_spatial_lpyr_temporal_ideal(string inFile, string outDir, double alpha, double lambda_c, 
+    double fl, double fh, double samplingRate, double chromAttenuation);
 
-int amplify_spatial_lpyr_temporal_iir(string inFile, string outDir, double alpha,
-    double lambda_c, double r1, double r2, double chromAttenuation);
+int amplify_spatial_lpyr_temporal_iir(string inFile, string outDir, double alpha, double lambda_c, 
+    double r1, double r2, double chromAttenuation); // --NOT WORKING--
 
 /*
 Spatial filter functions

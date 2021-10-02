@@ -1,3 +1,6 @@
+#ifndef IM_CONV_H
+#define IM_CONV_H
+
 #pragma once
 
 #include <iostream>
@@ -13,3 +16,5 @@ Mat im2uint8(Mat A);
 Mat rgb2ntsc(Mat A);
 
 Mat ntsc2rgb(Mat A);
+
+#endif /* IM_CONV_H */
