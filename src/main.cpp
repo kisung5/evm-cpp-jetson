@@ -66,11 +66,11 @@ int main(int argc, const char* argv[]) {
         100, 10, 100.0f, 120.0f, 600, 0);
     // IIR
     // int status12 = amplify_spatial_lpyr_temporal_iir(dataDir + "baby.mp4", resultsDir,
-    //     10, 16, 0.4f, 0.05f, 0.1f);
+    //     10.0f, 16.0f, 0.4f, 0.05f, 0.1f);
     // int status13 = amplify_spatial_lpyr_temporal_iir(dataDir + "wrist.mp4", resultsDir, 
-    //     10, 16, 0.4, 0.05, 0.1);
+    //     10.0f, 16.0f, 0.4f, 0.05f, 0.1f);
     int status = status1 + status2 + status3 + status4 + status5 + status6 + status7 + status8 +
-        status9 + status10 + status11 /*+ status12 + status13*/;
+        status9 + status10 + status11/* + status12 + status13*/;
     
     if (status < 0) {
         return -1;

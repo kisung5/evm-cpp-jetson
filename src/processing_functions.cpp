@@ -56,6 +56,8 @@ int amplify_spatial_Gdown_temporal_ideal(string inFile, string outDir, double al
 
     itime = omp_get_wtime();
 
+    // auto total_start = high_resolution_clock::now();
+
     string name;
     string delimiter = "/";
 
@@ -142,6 +144,7 @@ int amplify_spatial_Gdown_temporal_ideal(string inFile, string outDir, double al
     // Amplify color channels in NTSC
     // Get starting timepoint
     start = high_resolution_clock::now();
+
     Scalar color_amp(alpha, alpha * chromAttenuation, alpha * chromAttenuation);
 
 #pragma omp parallel for shared(color_amp, filtered_stack)
@@ -348,6 +351,7 @@ int amplify_spatial_lpyr_temporal_butter(string inFile, string outDir, double al
     videoOut.write(frame1);
 
     int nLevels = (int)pyr.size();
+
     // Scalar vector for color attenuation in YIQ (NTSC) color space
     Scalar color_amp(1.0f, chromAttenuation, chromAttenuation);
 
@@ -409,7 +413,6 @@ int amplify_spatial_lpyr_temporal_butter(string inFile, string outDir, double al
 
         // Storing computed Laplacian pyramid as previous pyramid
         pyr_prev = pyr;
-        //}
 
         // Amplify each spatial frecuency bands according to Figure 6 of our (EVM project) paper
 
@@ -481,9 +484,6 @@ int amplify_spatial_lpyr_temporal_butter(string inFile, string outDir, double al
     }
     std::cout << std::endl;
 
-    // Closes all the frames
-    destroyAllWindows();
-
     return 0;
 }
 
@@ -531,10 +531,7 @@ int amplify_spatial_lpyr_temporal_ideal(string inFile, string outDir, double alp
         to_string(fh) + "-alpha-" + to_string(alpha) + "-lambda_c-" + to_string(lambda_c) +
         "-chromAtn-" + to_string(chromAttenuation) + ".avi";
 
-    setBreakOnError(true);
     // Create a VideoCapture object and open the input file
-    // If the input is the web camera, pass 0 instead of the video file name
-    //VideoCapture video(0);
     VideoCapture video(inFile);
 
     // Check if video opened successfully
@@ -699,13 +696,19 @@ int amplify_spatial_lpyr_temporal_iir(string inFile, string outDir, double alpha
 
     name = inFile.substr(last);
     name = name.substr(0, name.find("."));
+    cout << name << endl;
 
     // Creates the result video name
     string outName = outDir + name + "-iir-r1-" + to_string(r1) + "-r2-" +
         to_string(r2) + "-alpha-" + to_string(alpha) + "-lambda_c-" + to_string(lambda_c) +
         "-chromAtn-" + to_string(chromAttenuation) + ".avi";
 
-    setBreakOnError(true);
+    float progress = 0;
+    for (int i = 0; i < BAR_WIDTH; ++i) {
+        std::cout << "=";
+    }
+    std::cout << std::endl;
+    std::cout << "Processing " << inFile << "." << endl;
 
     // Create a VideoCapture object and open the input file
     // If the input is the web camera, pass 0 instead of the video file name
@@ -719,57 +722,53 @@ int amplify_spatial_lpyr_temporal_iir(string inFile, string outDir, double alpha
     }
 
     // Extract video info
-    int len = (int)video.get(CAP_PROP_FRAME_COUNT);
-    int startIndex = 1;
-    int endIndex = len - 10;
     int vidHeight = (int)video.get(CAP_PROP_FRAME_HEIGHT);
     int vidWidth = (int)video.get(CAP_PROP_FRAME_WIDTH);
+    int nChannels = 3;
     int fr = (int)video.get(CAP_PROP_FPS);
+    int len = (int)video.get(CAP_PROP_FRAME_COUNT);
+    int startIndex = 0;
+    int endIndex = len - 10;
+
+    // Video data
+    cout << "Video information: Height-" << vidHeight << " Width-" << vidWidth
+        << " FrameRate-" << fr << " Frames-" << len << endl;
 
     // Define the codec and create VideoWriter object
     VideoWriter videoOut(outName, VideoWriter::fourcc('M', 'J', 'P', 'G'), fr,
         Size(vidWidth, vidHeight));
 
-    // Compute maximum pyramid height for every frame
-    int max_ht = 1 + maxPyrHt(vidWidth, vidHeight, MAX_FILTER_SIZE, MAX_FILTER_SIZE);
-
     // Variables to be used
-    Mat frame, rgbframe, ntscframe, output;
-    vector<Mat> lowpass1, lowpass2, pyr_prev;
-    vector<Mat> pyr(max_ht), filtered(max_ht);
-
-    float progress = 0;
-    for (int i = 0; i < BAR_WIDTH; ++i) {
-        std::cout << "=";
-    }
-    std::cout << std::endl;
-    std::cout << "Processing " << inFile << "." << endl;
+    Mat frame1, rgbframe1, ntscframe1;
 
     // First frame
-    video >> frame;
+    video >> frame1;
 
     // If the frame is empty, throw an error
-    if (frame.empty())
+    if (frame1.empty())
         return -1;
 
     // Color conversion GBR 2 NTSC
-    cvtColor(frame, rgbframe, COLOR_BGR2RGB);
-    rgbframe = im2double(rgbframe);
-    ntscframe = rgb2ntsc(rgbframe);
+    cvtColor(frame1, rgbframe1, COLOR_BGR2RGB);
+    rgbframe1 = im2double(rgbframe1);
+    ntscframe1 = rgb2ntsc(rgbframe1);
 
-    pyr = buildLpyrfromGauss(ntscframe, max_ht);
-    lowpass1 = pyr;
-    lowpass2 = pyr;
+    // Compute maximum pyramid height for every frame
+    int max_ht = 1 + maxPyrHt(vidWidth, vidHeight, MAX_FILTER_SIZE, MAX_FILTER_SIZE);
+
+    // Compute the Laplacian pyramid
+    vector<Mat> pyr = buildLpyrfromGauss(ntscframe1, max_ht);
+
+    vector<Mat> lowpass1 = pyr;
+    vector<Mat> lowpass2 = pyr;
+
+    // Writing the first frame (not processed)
+    videoOut.write(frame1);
 
     int nLevels = (int)pyr.size();
 
     // Scalar vector for color attenuation in YIQ (NTSC) color space
     Scalar color_amp(1.0f, chromAttenuation, chromAttenuation);
-
-    // Temporal filtering variables
-    double delta = (double)(lambda_c / 8) / (1 + alpha);
-    int exaggeration_factor = 2;
-    double lambda = (double)sqrt(vidHeight * vidHeight + vidWidth * vidWidth) / 3;
 
     for (int i = startIndex; i < endIndex; i++) {
         progress = (float)i / endIndex;
@@ -784,6 +783,8 @@ int amplify_spatial_lpyr_temporal_iir(string inFile, string outDir, double alpha
         std::cout << "] " << int(progress * 100.0) << " %\r";
         std::cout.flush();
 
+        Mat frame, rgbframe, ntscframe, out_frame, output;
+        vector<Mat> filtered(nLevels);
         // Capture frame-by-frame
         video >> frame;
 
@@ -799,25 +800,37 @@ int amplify_spatial_lpyr_temporal_iir(string inFile, string outDir, double alpha
         // Compute the laplacian pyramid
         pyr = buildLpyrfromGauss(ntscframe, max_ht);
 
-        double coefficient1 = (1 - r1);
-        double coefficient2 = (1 - r2);
-        int pixelIterator = 0;
-
-#pragma omp parallel for shared(lowpass1, lowpass2, pyr, filtered)
+        // Temporal filtering
+        // lowpass1 = (1-r1)*lowpass1 + r1*pyr;
+        // lowpass2 = (1-r2)*lowpass2 + r2*pyr;
+#pragma omp parallel for shared(r1, r2, lowpass1, lowpass2, pyr, filtered)
         for (int level = 0; level < nLevels; level++) {
-            lowpass1[level] = coefficient1 * lowpass1[level].clone() + r1 * pyr[level].clone();
-            lowpass2[level] = coefficient2 * lowpass2[level].clone() + r2 * pyr[level].clone();
-            filtered[level] = lowpass1[level] - lowpass2[level];
+
+            Mat lp1_lp = (1-r1) * lowpass1[level].clone();
+            Mat lp1_pyr = r1 * pyr[level].clone();
+            lowpass1[level] = lp1_lp.clone() + lp1_pyr.clone();
+
+            Mat lp2_lp =  (1-r2) * lowpass2[level].clone();
+            Mat lp2_pyr = r2 * pyr[level].clone();
+            lowpass2[level] = lp2_lp.clone() + lp2_pyr.clone();
+
+            Mat temp_result = lowpass1[level].clone() - lowpass2[level].clone();
+            filtered[level] = temp_result.clone();
         }
 
+        // Amplifying filtering variables
+        // The factor to boost alpha above the bound we have in the paper. (for better visualization)
+        double exaggeration_factor = 2.0f;
+        double delta = lambda_c / 8.0f / (1.0f + alpha);
+        double lambda = pow(pow(vidHeight, 2.0f) + pow(vidWidth, 2.0f), 0.5f) / 3.0f; // is experimental constant
+
         // Go one level down on pyramid each stage
-#pragma omp parallel for shared(filtered, lambda)
+#pragma omp parallel for shared(filtered, alpha, exaggeration_factor, delta, lambda)
         for (int l = nLevels - 1; l >= 0; l--) {
             // Compute modified alpha for this level
-            double currAlpha = lambda / delta / 8.0 - 1.0;
+            double currAlpha = lambda / delta / 8.0f - 1.0f;
             currAlpha = currAlpha * exaggeration_factor;
 
-            //cout << currAlpha << endl;
             Mat mat_result;
 
             if (l == max_ht - 1 || l == 0) { // ignore the highest and lowest frecuency band
@@ -840,7 +853,8 @@ int amplify_spatial_lpyr_temporal_iir(string inFile, string outDir, double alpha
         output = reconLpyr(filtered);
 
         multiply(output, color_amp, output);
-        add(ntscframe, output, output, noArray(), DataType<double>::type);
+
+        output = ntscframe.clone() + output.clone();
 
         rgbframe = ntsc2rgb(output);
 
@@ -851,16 +865,14 @@ int amplify_spatial_lpyr_temporal_iir(string inFile, string outDir, double alpha
 
         cvtColor(frame, frame, COLOR_RGB2BGR);
 
-        //frame_stack[i] = frame.clone();
         videoOut.write(frame);
-
     }
-
-    etime = omp_get_wtime();
 
     // When everything done, release the video capture and write object
     video.release();
     videoOut.release();
+
+    etime = omp_get_wtime();
 
     std::cout << std::endl;
     std::cout << "Finished. Elapsed time: " << etime - itime << " secs." << std::endl;
