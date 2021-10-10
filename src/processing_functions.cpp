@@ -1,9 +1,3 @@
-#include <omp.h>
-#include <opencv2/opencv.hpp>
-#include <opencv2/core.hpp>
-// #include <opencv2/highgui.hpp>
-#include <opencv2/videoio.hpp>
-#include <opencv2/imgproc.hpp>
 #include <iostream>
 #include <string>
 #include <sstream>
@@ -11,11 +5,20 @@
 #include <numeric>
 #include <cmath>
 
+#include <omp.h>
+
+#include <opencv2/opencv.hpp>
+#include <opencv2/core.hpp>
+#include <opencv2/videoio.hpp>
+#include <opencv2/imgproc.hpp>
+
+#include <opencv2/core/cuda.hpp>
+#include <opencv2/cudaimgproc.hpp>
+#include <opencv2/cudawarping.hpp>
+#include <opencv2/cudaarithm.hpp>
+
 #include "processing_functions.h"
 #include "im_conv.h"
-
-#pragma comment (lib, "opencv_world452.lib")
-#pragma comment (lib, "opencv_world452d.lib")
 
 extern "C" {
 #include "ellf.h"
@@ -56,10 +59,9 @@ int amplify_spatial_Gdown_temporal_ideal(string inFile, string outDir, double al
 
     itime = omp_get_wtime();
 
-    // auto total_start = high_resolution_clock::now();
-
     string name;
     string delimiter = "/";
+    string bar(BAR_WIDTH, '=');
 
     size_t last = 0; size_t next = 0;
     while ((next = inFile.find(delimiter, last)) != string::npos) {
@@ -69,11 +71,8 @@ int amplify_spatial_Gdown_temporal_ideal(string inFile, string outDir, double al
     name = inFile.substr(last);
     name = name.substr(0, name.find("."));
 
-    for (int i = 0; i < BAR_WIDTH; ++i) {
-        std::cout << "=";
-    }
-    std::cout << std::endl;
-    std::cout << "Processing " << inFile << "." << endl;
+    cout << bar << endl;
+    cout << "Processing " << inFile << "." << endl;
 
     // Creates the result video name
     string outName = outDir + name + "-ideal-from-" + to_string(fl) + "-to-" +
@@ -83,6 +82,9 @@ int amplify_spatial_Gdown_temporal_ideal(string inFile, string outDir, double al
     // Read video
     // Create a VideoCapture object and open the input file
     // If the input is the web camera, pass 0 instead of the video file name
+    // string str = "filesrc location=" + inFile + 
+    //     " ! qtdemux ! queue ! h264parse ! omxh264dec ! nvvidconv ! video/x-raw,format=BGRx ! queue ! videoconvert ! queue ! video/x-raw,format=BGR ! appsink";
+
     VideoCapture video(inFile);
 
     // Check if camera opened successfully
@@ -106,21 +108,51 @@ int amplify_spatial_Gdown_temporal_ideal(string inFile, string outDir, double al
 
     // Write video
     // Define the codec and create VideoWriter object
-    VideoWriter videoOut(outName, VideoWriter::fourcc('M', 'J', 'P', 'G'), fr,
+    VideoWriter videoOut(outName, CAP_FFMPEG, VideoWriter::fourcc('H','2','6','4'), fr,
         Size(vidWidth, vidHeight));
 
-    // Compute Gaussian blur stack
-    cout << "Spatial filtering... ";
-    // Get starting timepoint
+    // Decoding and reading the video
+    cout << "Reading video ";
     auto start = high_resolution_clock::now();
-    vector<Mat> Gdown_stack = build_GDown_stack(inFile, startIndex, endIndex, level);
+    // Video array
+    vector<Mat> video_array(endIndex - startIndex);
+    for (int i = startIndex; i < endIndex; i++) {
+        // Capture frame-by-frame
+        Mat frame;
+        video.read(frame);
+        // video >> frame;
+        video_array[i] = frame;
+    }
+    // When everything done, release the video capture and write object
+    video.release();
+
+    #pragma omp parallel for shared(video_array)
+    for (int i = startIndex; i < endIndex; i++) {
+        // Color conversion GBR 2 NTSC
+        Mat frame, rgbframe;
+        cvtColor(video_array[i], rgbframe, COLOR_BGR2RGB);
+        frame = im2double(rgbframe);
+        video_array[i] = rgb2ntsc(frame);
+    }
     // Get ending timepoint
     auto stop = high_resolution_clock::now();
     // Get duration. Substart timepoints to 
     // get durarion. To cast it to proper unit
     // use duration cast method
     auto duration = duration_cast<microseconds>(stop - start);
-    cout << "Finished ";
+    cout << "- Time: " << duration.count() << " microseconds" << endl;
+
+    // Compute Gaussian blur stack
+    cout << "Spatial filtering ";
+    // Get starting timepoint
+    start = high_resolution_clock::now();
+    vector<Mat> Gdown_stack = build_GDown_stack(video_array, startIndex, endIndex, level);
+    // Get ending timepoint
+    stop = high_resolution_clock::now();
+    // Get duration. Substart timepoints to 
+    // get durarion. To cast it to proper unit
+    // use duration cast method
+    duration = duration_cast<microseconds>(stop - start);
     cout << "- Time: " << duration.count() << " microseconds" << endl;
 
     // Getting the final Gdown Stack sizes same as Matlab code
@@ -130,7 +162,7 @@ int amplify_spatial_Gdown_temporal_ideal(string inFile, string outDir, double al
     //    " channels-" + to_string(Gdown_stack[0].channels()) << endl;
 
     // Temporal filtering
-    cout << "Temporal filtering... ";
+    cout << "Temporal filtering ";
     // Get starting timepoint
     start = high_resolution_clock::now();
     vector<Mat> filtered_stack = ideal_bandpassing(Gdown_stack, 1, fl, fh, samplingRate);
@@ -138,59 +170,31 @@ int amplify_spatial_Gdown_temporal_ideal(string inFile, string outDir, double al
     stop = high_resolution_clock::now();
     // Get duration. Substart timepoints to get durarion.
     duration = duration_cast<microseconds>(stop - start);
-    cout << "Finished ";
     cout << "- Time: " << duration.count() << " microseconds"<< endl;
 
     // Amplify color channels in NTSC
-    // Get starting timepoint
-    start = high_resolution_clock::now();
-
-    Scalar color_amp(alpha, alpha * chromAttenuation, alpha * chromAttenuation);
-
-#pragma omp parallel for shared(color_amp, filtered_stack)
-    for (int ind_amp = 0; ind_amp < filtered_stack.size(); ind_amp++) {
-        Mat frame, frame_result;
-        frame = filtered_stack[ind_amp];
-        multiply(frame, color_amp, frame_result);
-        filtered_stack[ind_amp] = frame_result;
-    }
-
-    // Get ending timepoint
-    stop = high_resolution_clock::now();
-    // Get duration. Substart timepoints to get durarion.
-    duration = duration_cast<microseconds>(stop - start);
-    cout << "Time amplify: " << duration.count() << " microseconds" << endl;
-
     // Render on the input video to make the output video
-    cout << "Rendering... ";
+    cout << "Rendering and amplifying... ";
     // Get starting timepoint
     start = high_resolution_clock::now();
 
+
+    #pragma omp parallel for shared(video_array, filtered_stack)
     for (int i = startIndex; i < endIndex; i++) {
-        Mat frame;
-        video >> frame;
-        Gdown_stack[i] = frame;
-    }
+        Mat frame, frame_result, ntscframe, filtered, rgbframe, out_frame;
+        frame = filtered_stack[i];
 
-#pragma omp parallel for shared(video, Gdown_stack, filtered_stack)
-    for (int i = startIndex; i < endIndex; i++) {
+        Scalar color_amp(alpha, alpha * chromAttenuation, alpha * chromAttenuation);
+        multiply(frame, color_amp, frame_result);
 
-        Mat frame, rgbframe, d_frame, ntscframe, filt_ind, filtered, out_frame;
-        // Capture frame-by-frame
-
-        // Color conversion GBR 2 NTSC
-        cvtColor(Gdown_stack[i], rgbframe, COLOR_BGR2RGB);
-        d_frame = im2double(rgbframe);
-        ntscframe = rgb2ntsc(d_frame);
-
-        filt_ind = filtered_stack[i];
+        ntscframe = video_array[i];
 
         Size img_size(vidWidth, vidHeight);//the dst image size,e.g.100x100
-        resize(filt_ind, filtered, img_size, 0, 0, INTER_CUBIC);//resize image
+        resize(frame_result, filtered, img_size, 0, 0, INTER_CUBIC);//resize image
 
-        filt_ind = filtered + ntscframe;
+        frame = filtered + ntscframe;
 
-        frame = ntsc2rgb(filt_ind);
+        frame = ntsc2rgb(frame);
 
         threshold(frame, out_frame, 0.0f, 0.0f, THRESH_TOZERO);
         threshold(out_frame, frame, 1.0f, 1.0f, THRESH_TRUNC);
@@ -199,36 +203,36 @@ int amplify_spatial_Gdown_temporal_ideal(string inFile, string outDir, double al
 
         cvtColor(rgbframe, out_frame, COLOR_RGB2BGR);
 
-        filtered_stack[i] = out_frame.clone();
+        filtered_stack[i] = out_frame;
     }
 
-    for (int i = startIndex; i < endIndex; i++) {
-        // Write the frame into the file 'outcpp.avi'
-        videoOut.write(filtered_stack[i]);
-    }
 
     // Get ending timepoint
     stop = high_resolution_clock::now();
     // Get duration. Substart timepoints to get durarion.
     duration = duration_cast<microseconds>(stop - start);
-    cout << "Finished";
-    cout << "- Time: " << duration.count() << " microseconds"<< endl;
+    cout << "Finished - Time: " << duration.count() << " microseconds"<< endl;
 
+    // Encoding and writing the video
+    cout << "Writing video ";
+    start = high_resolution_clock::now();
+    for (int i = startIndex; i < endIndex; i++) {
+        // Write the frame into the file 'outcpp.avi'
+        videoOut.write(filtered_stack[i]);
+    }
     // When everything done, release the video capture and write object
-    video.release();
     videoOut.release();
+    // Get ending timepoint
+    stop = high_resolution_clock::now();
+    duration = duration_cast<microseconds>(stop - start);
+    cout << "- Time: " << duration.count() << " microseconds" << endl;
 
     etime = omp_get_wtime();
 
-    std::cout << std::endl;
-    std::cout << "Finished. Elapsed time: " << etime - itime << " secs." << std::endl;
-    for (int i = 0; i < BAR_WIDTH; ++i) {
-        std::cout << "=";
-    }
-    std::cout << std::endl;
+    cout << endl;
+    cout << "Finished. Elapsed time: " << etime - itime << " secs." << endl;
+    cout << bar << endl;
 
-    // Closes all the frames
-    destroyAllWindows();
     return 0;
 }
 
@@ -547,6 +551,10 @@ int amplify_spatial_lpyr_temporal_ideal(string inFile, string outDir, double alp
     int vidHeight = (int)video.get(CAP_PROP_FRAME_HEIGHT);
     int vidWidth = (int)video.get(CAP_PROP_FRAME_WIDTH);
     int fr = (int)video.get(CAP_PROP_FPS);
+
+    // Testing values
+    cout << "Video information: Height-" << vidHeight << " Width-" << vidWidth
+        << " FrameRate-" << fr << " Frames-" << len << endl;
 
     // Compute maximum pyramid height for every frame
     int max_ht = 1 + maxPyrHt(vidWidth, vidHeight, MAX_FILTER_SIZE, MAX_FILTER_SIZE);
@@ -912,53 +920,50 @@ int amplify_spatial_lpyr_temporal_iir(string inFile, string outDir, double alpha
 * Author: Ki - Sung Lim
 * Date: May 2021
 **/
-vector<Mat> build_GDown_stack(string vidFile, int startIndex, int endIndex, int level) {
+vector<Mat> build_GDown_stack(vector<Mat> video_array, int startIndex, int endIndex, int level) {
 
-    // Read video
-    // Create a VideoCapture object and open the input file
-    // If the input is the web camera, pass 0 instead of the video file name
-    VideoCapture video(vidFile);
+    int t_size = endIndex - startIndex;
+    vector<Mat> GDown_stack(t_size);
 
-    // Check if camera opened successfully
-    if (!video.isOpened()) {
-        cout << "Error opening video stream or file" << endl;
-        exit(1);
+    #pragma omp parallel shared(video_array, GDown_stack)
+    {   
+        #pragma omp for 
+        for (int i = startIndex; i < endIndex; i++) {
+            // cuda::GpuMat 
+            Mat frame, rgbframe, ntscframe;
+            // vector<cuda::GpuMat>
+            vector<Mat> pyr_output;
+
+            ntscframe = video_array[i];
+
+            // pyr_output = buildPyramidGpu(ntscframe, level + 1);
+            buildPyramid(ntscframe, pyr_output, level + 1, BORDER_REFLECT101);
+
+            GDown_stack[i] = pyr_output[level].clone();
+
+            pyr_output.clear();
+            pyr_output.shrink_to_fit();
+        }
     }
-
-    // Extracting video info
-    int vidHeight = (int)video.get(CAP_PROP_FRAME_HEIGHT);
-    int vidWidth = (int)video.get(CAP_PROP_FRAME_WIDTH);
-    int nChannels = 3;
-    int t_size = endIndex - startIndex + 1;
-
-    vector<Mat> GDown_stack;
-    GDown_stack.reserve(t_size);
-
-    for (int i = startIndex; i < endIndex; i++) {
-        Mat frame;
-        video >> frame;
-        GDown_stack.push_back(frame);
-    }
-
-#pragma omp parallel for shared(GDown_stack)
-    for (int i = startIndex; i < endIndex; i++) {
-        Mat frame, rgbframe, ntscframe;
-        vector<Mat> pyr_output;
-        // Capture frame-by-frame
-        //video >> frame;
-
-        cvtColor(GDown_stack[i], rgbframe, COLOR_BGR2RGB);
-        frame = im2double(rgbframe);
-        ntscframe = rgb2ntsc(frame);
-
-        buildPyramid(ntscframe, pyr_output, level + 1, BORDER_REFLECT101);
-
-        GDown_stack[i] = pyr_output[level].clone();
-    }
-
-    video.release();
 
     return GDown_stack;
+}
+
+
+vector<Mat> buildPyramidGpu(Mat frame, int maxlevel) {
+
+    vector<Mat> pyr_output(maxlevel);
+
+    pyr_output[0] = frame.clone();
+
+    for(int level = 0; level < maxlevel-1; level++) {
+        cuda::GpuMat gpu_src, gpu_dest;
+        gpu_src.upload(pyr_output[level]);
+        cuda::pyrDown(gpu_src, gpu_dest);
+        gpu_dest.download(pyr_output[level+1]);
+    }
+
+    return pyr_output;
 }
 
 
@@ -1000,7 +1005,7 @@ vector<Mat> ideal_bandpassing(vector<Mat> input, int dim, double wl, double wh, 
     */
     if (dim > 1 + input[0].channels()) {
         cout << "Exceed maximun dimension" << endl;
-        exit(1);
+        exit(-1);
     }
 
     // Printing the cut frequencies
@@ -1019,7 +1024,7 @@ vector<Mat> ideal_bandpassing(vector<Mat> input, int dim, double wl, double wh, 
     // Initialize the cv::Mat with the temp vector and without copying values
     Mat Freq(Freq_temp, false);
     double alpha = (double)samplingRate / (double)n;
-    Freq.convertTo(Freq, CV_64FC1, alpha); // alpha is mult to every value
+    Freq.convertTo(Freq, CV_32FC1, alpha); // alpha is mult to every value
 
     Mat mask = (Freq > wl) & (Freq < wh); // creates a boolean matrix/mask
 
@@ -1049,25 +1054,27 @@ vector<Mat> ideal_bandpassing(vector<Mat> input, int dim, double wl, double wh, 
 
     If you didn't see it: pixel_time-row/x-col/y-colorchannel
     */
-    Mat temp_dft(total_rows, n, CV_64FC1);
+    Mat temp_dft(total_rows, n, CV_32FC1);
+    Mat input_dft, input_idft; // For DFT input / output 
 
     // Here we populate the forementioned matrix
-#pragma omp parallel for
-    for (int x = 0; x < input[0].rows; x++) {
-#pragma omp parallel for
-        for (int y = 0; y < input[0].cols; y++) {
-#pragma omp parallel for shared(input, temp_dft)
-            for (int i = 0; i < n; i++) {
-                int pos_temp = 3 * (y + x * input[0].cols);
+    #pragma omp parallel shared(input, temp_dft)
+    // #pragma omp parallel shared(input, temp_dft, input_dft, input_idft)
+    {
+        #pragma omp for collapse(3) 
+        for (int x = 0; x < input[0].rows; x++) {
+            for (int y = 0; y < input[0].cols; y++) {
+                for (int i = 0; i < n; i++) {
+                    int pos_temp = 3 * (y + x * input[0].cols);
 
-                Vec3d pix_colors = input[i].at<Vec3d>(x, y);
-                temp_dft.at<double>(pos_temp, i) = pix_colors[0];
-                temp_dft.at<double>(pos_temp + 1, i) = pix_colors[1];
-                temp_dft.at<double>(pos_temp + 2, i) = pix_colors[2];
+                    Vec3f pix_colors = input[i].at<Vec3f>(x, y);
+                    temp_dft.at<float>(pos_temp, i) = pix_colors[0];
+                    temp_dft.at<float>(pos_temp + 1, i) = pix_colors[1];
+                    temp_dft.at<float>(pos_temp + 2, i) = pix_colors[2];
+                }
             }
         }
     }
-
     // Testing the values in temp_dft [OK - PASSED]
     //int test_index = n-1;
     //cout << "-----Testing vectorizing values in " + to_string(test_index) + "-------" << endl;
@@ -1077,12 +1084,13 @@ vector<Mat> ideal_bandpassing(vector<Mat> input, int dim, double wl, double wh, 
     //cout << input[test_index].at<Vec3d>(5, 9) << endl;
     //cout << "----------End of tests----------" << endl;
 
-    Mat input_dft, input_idft; // For DFT input / output 
-
     // 1-D DFT applied for every row, complex output 
     // (2 value real-complex vector)
+    // cuda::GpuMat temp_dft_gpu, input_dft_gpu, input_idft_gpu;
+    // temp_dft_gpu.upload(temp_dft);
     dft(temp_dft, input_dft, DFT_ROWS | DFT_COMPLEX_OUTPUT);
-
+    // cuda::dft(temp_dft_gpu, input_dft_gpu, temp_dft_gpu.size(), DFT_ROWS);
+    // input_dft_gpu.download(input_dft);
     // Testing the values in the transformation DFT [OK - Passed]
     //int test_index = total_rows-1;
     //cout << "-----Testing DFT values in " + to_string(test_index) + "-------" << endl;
@@ -1095,13 +1103,15 @@ vector<Mat> ideal_bandpassing(vector<Mat> input, int dim, double wl, double wh, 
     //cout << "----------End of tests----------" << endl;
 
     // Filtering the video matrix with a mask
-#pragma omp parallel for
-    for (int i = 0; i < total_rows; i++) {
-#pragma omp parallel for shared(input_dft)
-        for (int j = 0; j < n; j++) {
-            if (!mask.at<bool>(j, 0)) {
-                Vec2d temp_zero_vector(0.0f, 0.0f);
-                input_dft.at<Vec2d>(i, j) = temp_zero_vector;
+    #pragma omp parallel shared(input_dft)
+    {
+        #pragma omp for collapse(2) 
+        for (int i = 0; i < total_rows; i++) {
+            for (int j = 0; j < n; j++) {
+                if (!mask.at<bool>(j, 0)) {
+                    Vec2f temp_zero_vector(0.0f, 0.0f);
+                    input_dft.at<Vec2f>(i, j) = temp_zero_vector;
+                }
             }
         }
     }
@@ -1109,6 +1119,9 @@ vector<Mat> ideal_bandpassing(vector<Mat> input, int dim, double wl, double wh, 
     // 1-D inverse DFT applied for every row, complex output 
     // Only the real part is importante
     idft(input_dft, input_idft, DFT_ROWS | DFT_COMPLEX_INPUT | DFT_SCALE);
+    // temp_dft_gpu.upload(input_dft);
+    // cuda::dft(temp_dft_gpu, input_idft_gpu, temp_dft_gpu.size(), DFT_ROWS | DFT_COMPLEX_INPUT | DFT_SCALE | DFT_INVERSE);
+    // input_idft_gpu.download(input_idft);
 
     // Testing the values for the transformation IDFT [OK - Passed]
     //int test_index = total_rows-1;
@@ -1123,28 +1136,26 @@ vector<Mat> ideal_bandpassing(vector<Mat> input, int dim, double wl, double wh, 
 
     // Reording the matrix to a vector of matrixes, 
     // contrary of what was done for temp_dft
-#pragma omp parallel for shared(input)
-    for (int i = 0; i < n; i++) {
-        Mat temp_filtframe(input[0].rows, input[0].cols, CV_64FC3);
-        //int pos_temp = 0;
-#pragma omp parallel for 
-        for (int x = 0; x < input[0].rows; x++) {
-#pragma omp parallel for shared(input_idft, temp_filtframe)
-            for (int y = 0; y < input[0].cols; y++) {
+    #pragma omp parallel shared(input, input_idft)
+    {
+        #pragma omp for
+        for (int i = 0; i < n; i++) {
+            Mat temp_filtframe(input[0].rows, input[0].cols, CV_32FC3);
+            // #pragma omp parallel for shared(, temp_filtframe) collapse(2)
+            // #pragma omp for collapse(2)
+            for (int x = 0; x < input[0].rows; x++) {
+                for (int y = 0; y < input[0].cols; y++) {
+                    int pos_temp = 3 * (y + x * input[0].cols);
 
-                int pos_temp = 3 * (y + x * input[0].cols);
-
-                Vec3d pix_colors;
-                pix_colors[0] = input_idft.at<Vec2d>(pos_temp, i)[0];
-                pix_colors[1] = input_idft.at<Vec2d>(pos_temp + 1, i)[0];
-                pix_colors[2] = input_idft.at<Vec2d>(pos_temp + 2, i)[0];
-                temp_filtframe.at<Vec3d>(x, y) = pix_colors;
-
-                //pos_temp += 3;
+                    Vec3f pix_colors;
+                    pix_colors[0] = input_idft.at<Vec2f>(pos_temp, i)[0];
+                    pix_colors[1] = input_idft.at<Vec2f>(pos_temp + 1, i)[0];
+                    pix_colors[2] = input_idft.at<Vec2f>(pos_temp + 2, i)[0];
+                    temp_filtframe.at<Vec3f>(x, y) = pix_colors;
+                }
             }
+            input[i] = temp_filtframe;
         }
-
-        input[i] = temp_filtframe;
     }
 
     return input;

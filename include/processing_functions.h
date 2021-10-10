@@ -31,7 +31,9 @@ int amplify_spatial_lpyr_temporal_iir(string inFile, string outDir, double alpha
 Spatial filter functions
 */
 
-vector<Mat> build_GDown_stack(string vidFile, int startIndex, int endIndex, int level);
+vector<Mat> build_GDown_stack(vector<Mat> video_array, int startIndex, int endIndex, int level);
+
+vector<Mat> buildPyramidGpu(Mat frame, int maxlevel);
 
 int maxPyrHt(int frameWidth, int frameHeight, int filterSizeX, int filterSizeY);
 

@@ -3,12 +3,13 @@
 #include <opencv2/highgui.hpp>
 #include <opencv2/videoio.hpp>
 #include <opencv2/imgproc.hpp>
+#include <opencv2/core/cuda.hpp>
+#include <opencv2/cudaimgproc.hpp>
 #include <iostream>
 #include <string>
 #include <sstream>
 
 #include "im_conv.h"
-
 
 Mat im2double(Mat A) {
 	Mat B;
@@ -23,7 +24,7 @@ Mat im2double(Mat A) {
 	// here is a dummy one, black by default, 256x256
 	// Get the data type of the input image
 	if (A.type() == CV_8UC3) {
-		A.convertTo(B, CV_64FC3, 1.0 / 255.0);  // Divide all values by the largest possible value in the datatype
+		A.convertTo(B, CV_32FC3, 1.0 / 255.0);  // Divide all values by the largest possible value in the datatype
 	} 
 
 	return B;
@@ -31,6 +32,27 @@ Mat im2double(Mat A) {
 
 Mat im2uint8(Mat A) {
 	Mat B;
+
+	A.convertTo(B, CV_8UC3, 255);
+
+	return B;
+}
+
+cuda::GpuMat im2double(cuda::GpuMat A) {
+	cuda::GpuMat B;
+
+	// CV_8UC3: 3 channels, each on unsigned char, so [0,255]
+	// here is a dummy one, black by default, 256x256
+	// Get the data type of the input image
+	if (A.type() == CV_8UC3) {
+		A.convertTo(B, CV_32FC3, 1.0f / 255.0f);  // Divide all values by the largest possible value in the datatype
+	} 
+
+	return B;
+}
+
+cuda::GpuMat im2uint8(cuda::GpuMat A) {
+	cuda::GpuMat B;
 
 	A.convertTo(B, CV_8UC3, 255);
 
@@ -62,6 +84,42 @@ Mat ntsc2rgb(Mat A) {
 		1.000f, -1.106f, 1.703f);
 
 	transform(A, B, matRGB);
+
+	return B;
+}
+
+cuda::GpuMat rgb2ntsc(cuda::GpuMat A) {
+	cuda::GpuMat B;	
+	Mat A_t, B_t;
+
+	A.download(A_t);
+
+	// let's define the matrix for RGB -> YIQ conversion
+	Matx33d matYIQ(0.299f, 0.587f, 0.114f,
+		0.596f, -0.274f, -0.322f,
+		0.211f, -0.523f, 0.312f);
+
+	transform(A_t, B_t, matYIQ);
+
+	B.upload(B_t);
+
+	return B;
+}
+
+cuda::GpuMat ntsc2rgb(cuda::GpuMat A) {
+	cuda::GpuMat B;
+	Mat A_t, B_t;
+
+	A.download(A_t);
+
+	// let's define the matrix for YIQ -> RGB conversion
+	Matx33d matRGB(1.000f, 0.956f, 0.621f,
+		1.000f, -0.272f, -0.647f,
+		1.000f, -1.106f, 1.703f);
+	
+	transform(A_t, B_t, matRGB);
+
+	B.upload(B_t);
 
 	return B;
 }
