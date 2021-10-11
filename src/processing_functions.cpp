@@ -13,9 +13,9 @@
 #include <opencv2/imgproc.hpp>
 
 #include <opencv2/core/cuda.hpp>
-#include <opencv2/cudaimgproc.hpp>
-#include <opencv2/cudawarping.hpp>
-#include <opencv2/cudaarithm.hpp>
+// #include <opencv2/cudaimgproc.hpp>
+// #include <opencv2/cudawarping.hpp>
+// #include <opencv2/cudaarithm.hpp>
 
 #include "processing_functions.h"
 #include "im_conv.h"
@@ -265,12 +265,12 @@ int amplify_spatial_lpyr_temporal_butter(string inFile, string outDir, double al
     //  [high_a, high_b] = butter(1, fh / samplingRate, 'low');
     int this_samplingRate = samplingRate * 2;
     butter_coeff(1, 1, this_samplingRate, fl);
-    Vec2d low_a(pp[0], pp[1]);
-    Vec2d low_b(aa[0], aa[1]);
+    Vec2f low_a(pp[0], pp[1]);
+    Vec2f low_b(aa[0], aa[1]);
 
     butter_coeff(1, 1, this_samplingRate, fh);
-    Vec2d high_a(pp[0], pp[1]);
-    Vec2d high_b(aa[0], aa[1]);
+    Vec2f high_a(pp[0], pp[1]);
+    Vec2f high_b(aa[0], aa[1]);
 
     // Out video preparation
     string name;
@@ -406,22 +406,25 @@ int amplify_spatial_lpyr_temporal_butter(string inFile, string outDir, double al
         #pragma omp parallel for firstprivate(low_a, low_b, high_a, high_b, pyr_prev, pyr) \
             shared(lowpass1, lowpass2, filtered)
         for (int l = 0; l < nLevels; l++) {
-            Mat lp1_h, pyr_h, pre_h, lp1_s;
-            Mat lp2_l, pyr_l, pre_l, lp2_s;
+            Mat lp1_h, pyr_h, pre_h, lp1_s, lp1_r;
+            Mat lp2_l, pyr_l, pre_l, lp2_s, lp2_r;
 
-            lp1_h = -high_b[1] * lowpass1[l];
-            pyr_h = high_a[0] * pyr[l];
-            pre_h = high_a[1] * pyr_prev[l];
-            lp1_s = lp1_h + pyr_h + pre_h;
-            lowpass1[l] = lp1_s / high_b[0];
+            lp1_h = -high_b[1] * lowpass1[l].clone();
+            pyr_h = high_a[0] * pyr[l].clone();
+            pre_h = high_a[1] * pyr_prev[l].clone();
+            lp1_s = lp1_h.clone() + pyr_h.clone() + pre_h.clone();
+            lp1_r = lp1_s.clone() / high_b[0];
+            lowpass1[l] = lp1_r.clone();
 
-            lp2_l = -low_b[1] * lowpass2[l];
-            pyr_l = low_a[0] * pyr[l];
-            pre_l = low_a[1] * pyr_prev[l];
-            lp2_s = lp2_l + pyr_l + pre_l;
-            lowpass2[l] = lp2_s / low_b[0];
+            lp2_l = -low_b[1] * lowpass2[l].clone();
+            pyr_l = low_a[0] * pyr[l].clone();
+            pre_l = low_a[1] * pyr_prev[l].clone();
+            lp2_s = lp2_l.clone() + pyr_l.clone() + pre_l.clone();
+            lp2_r = lp2_s.clone() / low_b[0];
+            lowpass2[l] = lp2_r.clone();
 
-            filtered[l] = lowpass1[l] - lowpass2[l];
+            Mat temp_result = lowpass1[l].clone() - lowpass2[l].clone();
+            filtered[l] = temp_result.clone();
         }
         // Storing computed Laplacian pyramid as previous pyramid
         pyr_prev = pyr;
@@ -431,31 +434,31 @@ int amplify_spatial_lpyr_temporal_butter(string inFile, string outDir, double al
         //  band of Laplacian pyramid
 
         // The factor to boost alpha above the bound we have in the paper. (for better visualization)
-        double exaggeration_factor = 2.0f;
-        double delta = lambda_c / 8.0f / (1.0f + alpha);
-        double lambda = pow(pow(vidHeight, 2.0f) + pow(vidWidth, 2.0f), 0.5f) / 3.0f; // is experimental constant
+        float exaggeration_factor = 2.0f;
+        float delta = lambda_c / 8.0f / (1.0f + alpha);
+        float lambda = pow(pow(vidHeight, 2.0f) + pow(vidWidth, 2.0f), 0.5f) / 3.0f; // is experimental constant
 
         #pragma omp parallel for shared(filtered) firstprivate(alpha, exaggeration_factor, delta, lambda)
         for (int l = nLevels - 1; l >= 0; l--) {
             // go one level down on pyramid each stage
 
             // Compute modified alpha for this level
-            double currAlpha = lambda / delta / 8.0f - 1.0f;
+            float currAlpha = lambda / delta / 8.0f - 1.0f;
             currAlpha = currAlpha * exaggeration_factor;
 
             Mat mat_result;
 
             if (l == nLevels - 1 || l == 0) { // ignore the highest and lowest frecuency band
                 Size mat_sz(filtered[l].cols, filtered[l].rows);
-                mat_result = Mat::zeros(mat_sz, CV_64FC3);
+                mat_result = Mat::zeros(mat_sz, CV_32FC3);
             }
             else if (currAlpha > alpha) { // representative lambda exceeds lambda_c
-                mat_result = alpha * filtered[l];
+                mat_result = alpha * filtered[l].clone();
             }
             else {
-                mat_result = currAlpha * filtered[l];
+                mat_result = currAlpha * filtered[l].clone();
             }
-            filtered[l] = mat_result;
+            filtered[l] = mat_result.clone();
 
             lambda = lambda / 2.0f;
         }
@@ -484,9 +487,9 @@ int amplify_spatial_lpyr_temporal_butter(string inFile, string outDir, double al
     }
 
     // Encoding and writing the video
-    cout << "Writing video ";
+    cout << endl << "Writing video ";
     start = high_resolution_clock::now();
-    for (int i = startIndex; i < endIndex; i++) {
+    for (int i = startIndex; i < endIndex-1; i++) {
         // Write the frame into the file 'outcpp.avi'
         videoOut.write(filtered_stack[i]);
     }
@@ -872,7 +875,7 @@ int amplify_spatial_lpyr_temporal_iir(string inFile, string outDir, double alpha
 
             if (l == max_ht - 1 || l == 0) { // ignore the highest and lowest frecuency band
                 Size mat_sz(filtered[l].cols, filtered[l].rows);
-                mat_result = Mat::zeros(mat_sz, CV_64FC3);
+                mat_result = Mat::zeros(mat_sz, CV_32FC3);
             }
             else if (currAlpha > alpha) { // representative lambda exceeds lambda_c
                 mat_result = alpha * filtered[l].clone();
@@ -979,21 +982,21 @@ vector<Mat> build_GDown_stack(vector<Mat> video_array, int startIndex, int endIn
 }
 
 
-vector<Mat> buildPyramidGpu(Mat frame, int maxlevel) {
+// vector<Mat> buildPyramidGpu(Mat frame, int maxlevel) {
 
-    vector<Mat> pyr_output(maxlevel);
+//     vector<Mat> pyr_output(maxlevel);
 
-    pyr_output[0] = frame.clone();
+//     pyr_output[0] = frame.clone();
 
-    for(int level = 0; level < maxlevel-1; level++) {
-        cuda::GpuMat gpu_src, gpu_dest;
-        gpu_src.upload(pyr_output[level]);
-        cuda::pyrDown(gpu_src, gpu_dest);
-        gpu_dest.download(pyr_output[level+1]);
-    }
+//     for(int level = 0; level < maxlevel-1; level++) {
+//         cuda::GpuMat gpu_src, gpu_dest;
+//         gpu_src.upload(pyr_output[level]);
+//         cuda::pyrDown(gpu_src, gpu_dest);
+//         gpu_dest.download(pyr_output[level+1]);
+//     }
 
-    return pyr_output;
-}
+//     return pyr_output;
+// }
 
 
 /**
@@ -1319,7 +1322,7 @@ vector<vector<Mat>> ideal_bandpassing_lpyr(vector<vector<Mat>>& input, int dim, 
     // Initialize the cv::Mat with the temp vector and without copying values
     Mat Freq(Freq_temp, false);
     double alpha = (double)samplingRate / (double)n;
-    Freq.convertTo(Freq, CV_64FC1, alpha);
+    Freq.convertTo(Freq, CV_32FC1, alpha);
 
     Mat mask = (Freq > wl) & (Freq < wh); // creates a boolean matrix/mask
 
@@ -1355,7 +1358,7 @@ vector<vector<Mat>> ideal_bandpassing_lpyr(vector<vector<Mat>>& input, int dim, 
 
     In other words: pixel_time-row/x-col/y-colorchannel
     */
-    Mat tmp(total_pixels, n, CV_64FC1);
+    Mat tmp(total_pixels, n, CV_32FC1);
 
     // 0.155 s elapsed since start
 
@@ -1363,7 +1366,6 @@ vector<vector<Mat>> ideal_bandpassing_lpyr(vector<vector<Mat>>& input, int dim, 
     // 14.99 s
     #pragma omp parallel shared(tmp) firstprivate(input)
     {
-        #pragma omp for
         for (int level = 0; level < levels; level++) {
             #pragma omp for collapse(3)
             for (int x = 0; x < input[0][level].rows; x++) {
@@ -1371,10 +1373,10 @@ vector<vector<Mat>> ideal_bandpassing_lpyr(vector<vector<Mat>>& input, int dim, 
                     for (int i = 0; i < n; i++) {
                         int pos_temp = 3 * (y + x * input[0][level].cols);
 
-                        Vec3d pix_colors = input[i][level].at<Vec3d>(x, y);
-                        tmp.at<double>(pos_temp, i) = pix_colors[0];
-                        tmp.at<double>(pos_temp + 1, i) = pix_colors[1];
-                        tmp.at<double>(pos_temp + 2, i) = pix_colors[2];
+                        Vec3f pix_colors = input[i][level].at<Vec3f>(x, y);
+                        tmp.at<float>(pos_temp, i) = pix_colors[0];
+                        tmp.at<float>(pos_temp + 1, i) = pix_colors[1];
+                        tmp.at<float>(pos_temp + 2, i) = pix_colors[2];
                     }
                 }
             }
@@ -1403,8 +1405,8 @@ vector<vector<Mat>> ideal_bandpassing_lpyr(vector<vector<Mat>>& input, int dim, 
     for (int i = 0; i < total_pixels; i++) {
         for (int j = 0; j < n; j++) {
             if (!mask.at<bool>(j, 0)) {
-                Vec2d temp_zero_vector(0.0f, 0.0f);
-                tmp.at<Vec2d>(i, j) = temp_zero_vector;
+                Vec2f temp_zero_vector(0.0f, 0.0f);
+                tmp.at<Vec2f>(i, j) = temp_zero_vector;
             }
         }
     }
@@ -1420,18 +1422,18 @@ vector<vector<Mat>> ideal_bandpassing_lpyr(vector<vector<Mat>>& input, int dim, 
         vector<Mat> levelsVector(levels);
         #pragma omp parallel for shared(levelsVector)
         for (int level = 0; level < levels; level++) {
-            Mat temp_filtframe(input[0][level].rows, input[0][level].cols, CV_64FC3);
+            Mat temp_filtframe(input[0][level].rows, input[0][level].cols, CV_32FC3);
             #pragma omp parallel for
             for (int x = 0; x < input[0][level].rows; x++) {
                 #pragma omp parallel for shared(tmp, temp_filtframe)
                 for (int y = 0; y < input[0][level].cols; y++) {
                     int pos_temp = 3 * (y + x * input[0][level].cols);
                     
-                    Vec3d pix_colors;
-                    pix_colors[0] = tmp.at<Vec2d>(pos_temp, i)[0];
-                    pix_colors[1] = tmp.at<Vec2d>(pos_temp + 1, i)[0];
-                    pix_colors[2] = tmp.at<Vec2d>(pos_temp + 2, i)[0];
-                    temp_filtframe.at<Vec3d>(x, y) = pix_colors;
+                    Vec3f pix_colors;
+                    pix_colors[0] = tmp.at<Vec2f>(pos_temp, i)[0];
+                    pix_colors[1] = tmp.at<Vec2f>(pos_temp + 1, i)[0];
+                    pix_colors[2] = tmp.at<Vec2f>(pos_temp + 2, i)[0];
+                    temp_filtframe.at<Vec3f>(x, y) = pix_colors;
                 }
             }
             levelsVector[level] = temp_filtframe.clone();
