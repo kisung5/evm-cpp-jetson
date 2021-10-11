@@ -345,7 +345,7 @@ int amplify_spatial_lpyr_temporal_butter(string inFile, string outDir, double al
         // Capture frame-by-frame
         Mat frame;
         video.read(frame);
-        video_array[i] = frame.clone();
+        video_array[i] = frame;
         frame.release();
     }
     // When everything done, release the video capture and write object
@@ -445,7 +445,7 @@ int amplify_spatial_lpyr_temporal_butter(string inFile, string outDir, double al
             lowpass2[l] = lp2_r;
             lp2_r.release();
 
-            filtered[l] = lowpass1[l].clone() - lowpass2[l].clone();
+            filtered[l] = lowpass1[l] - lowpass2[l];
         }
         // pyr_prev = pyr;
         // Amplify each spatial frecuency bands according to Figure 6 of our (EVM project) paper
@@ -486,14 +486,18 @@ int amplify_spatial_lpyr_temporal_butter(string inFile, string outDir, double al
         }
 
         filtered_stack[i-1] = reconLpyr(filtered);
-        filtered.clear();
-        filtered.shrink_to_fit();
+        vector<Mat>().swap(filtered);
+        // filtered.clear();
+        // filtered.shrink_to_fit();
     }
-
-    pyr.clear(); pyr.shrink_to_fit();
-    pyr_prev.clear(); pyr_prev.shrink_to_fit();
-    lowpass1.clear(); lowpass1.shrink_to_fit();
-    lowpass2.clear(); lowpass2.shrink_to_fit();
+    vector<Mat>().swap(pyr);
+    vector<Mat>().swap(pyr_prev);
+    vector<Mat>().swap(lowpass1);
+    vector<Mat>().swap(lowpass2);
+    // pyr.clear(); pyr.shrink_to_fit();
+    // pyr_prev.clear(); pyr_prev.shrink_to_fit();
+    // lowpass1.clear(); lowpass1.shrink_to_fit();
+    // lowpass2.clear(); lowpass2.shrink_to_fit();
     
     // Render on the input video
     #pragma omp parallel for shared(video_array, filtered_stack) firstprivate(color_amp)
@@ -515,7 +519,8 @@ int amplify_spatial_lpyr_temporal_butter(string inFile, string outDir, double al
         filtered_stack[i-1] = rgbframe;
         rgbframe.release();
     }
-    video_array.clear(); video_array.shrink_to_fit();
+    vector<Mat>().swap(video_array);
+    // video_array.clear(); video_array.shrink_to_fit();
 
     // Encoding and writing the video
     cout << endl << "Writing video ";
@@ -525,7 +530,8 @@ int amplify_spatial_lpyr_temporal_butter(string inFile, string outDir, double al
         videoOut.write(filtered_stack[i]);
         filtered_stack[i].release();
     }
-    filtered_stack.clear(); filtered_stack.shrink_to_fit();
+    vector<Mat>().swap(filtered_stack);
+    // filtered_stack.clear(); filtered_stack.shrink_to_fit();
     // When everything done, release the video capture and write object
     videoOut.release();
     // Get ending timepoint
@@ -1265,12 +1271,12 @@ vector<Mat> buildLpyrfromGauss(Mat image, int levels) {
     for (int l = 0; l < levels - 1; l++) {
         Mat expandedPyramid;
         pyrUp(gaussianPyramid[l+1], expandedPyramid, Size(gaussianPyramid[l].cols, gaussianPyramid[l].rows), BORDER_REFLECT101);
-        laplacianPyramid[l] = gaussianPyramid[l].clone() - expandedPyramid.clone();
-        // expandedPyramid.release();
+        laplacianPyramid[l] = gaussianPyramid[l] - expandedPyramid;
+        expandedPyramid.release();
         // gaussianPyramid[l].release();
     }
 
-    laplacianPyramid[levels-1] = gaussianPyramid[levels-1].clone();
+    laplacianPyramid[levels-1] = gaussianPyramid[levels-1];
     gaussianPyramid.clear();
     gaussianPyramid.shrink_to_fit();
 
@@ -1322,13 +1328,16 @@ Mat reconLpyr(vector<Mat> lpyr) {
 
     int this_level = levels - 1;
     Mat res = lpyr[this_level];
+    lpyr[this_level].release();
 
     for (int l = levels - 2; l >= 0; l--) {
         Size res_sz = Size(lpyr[l].cols, lpyr[l].rows);
         pyrUp(res, res, res_sz, BORDER_REFLECT101);
-
         res += lpyr[l];
+        lpyr[l].release();
     }
+
+    vector<Mat>().swap(lpyr);
 
     return res;
 }
