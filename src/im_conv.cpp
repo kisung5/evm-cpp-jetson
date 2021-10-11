@@ -63,7 +63,7 @@ Mat rgb2ntsc(Mat A) {
 	Mat B;
 
 	// let's define the matrix for RGB -> YIQ conversion
-	Matx33d matYIQ(0.299f, 0.587f, 0.114f,
+	Matx33f matYIQ(0.299f, 0.587f, 0.114f,
 		0.596f, -0.274f, -0.322f,
 		0.211f, -0.523f, 0.312f);
 
@@ -79,7 +79,7 @@ Mat ntsc2rgb(Mat A) {
 	Mat B;
 
 	// let's define the matrix for YIQ -> RGB conversion
-	Matx33d matRGB(1.000f, 0.956f, 0.621f,
+	Matx33f matRGB(1.000f, 0.956f, 0.621f,
 		1.000f, -0.272f, -0.647f,
 		1.000f, -1.106f, 1.703f);
 
@@ -95,7 +95,7 @@ cuda::GpuMat rgb2ntsc(cuda::GpuMat A) {
 	A.download(A_t);
 
 	// let's define the matrix for RGB -> YIQ conversion
-	Matx33d matYIQ(0.299f, 0.587f, 0.114f,
+	Matx33f matYIQ(0.299f, 0.587f, 0.114f,
 		0.596f, -0.274f, -0.322f,
 		0.211f, -0.523f, 0.312f);
 
@@ -113,7 +113,7 @@ cuda::GpuMat ntsc2rgb(cuda::GpuMat A) {
 	A.download(A_t);
 
 	// let's define the matrix for YIQ -> RGB conversion
-	Matx33d matRGB(1.000f, 0.956f, 0.621f,
+	Matx33f matRGB(1.000f, 0.956f, 0.621f,
 		1.000f, -0.272f, -0.647f,
 		1.000f, -1.106f, 1.703f);
 	

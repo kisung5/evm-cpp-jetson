@@ -121,7 +121,8 @@ int amplify_spatial_Gdown_temporal_ideal(string inFile, string outDir, double al
         Mat frame;
         video.read(frame);
         // video >> frame;
-        video_array[i] = frame;
+        video_array[i] = frame.clone();
+        frame.release();
     }
     // When everything done, release the video capture and write object
     video.release();
@@ -131,8 +132,11 @@ int amplify_spatial_Gdown_temporal_ideal(string inFile, string outDir, double al
         // Color conversion GBR 2 NTSC
         Mat frame, rgbframe;
         cvtColor(video_array[i], rgbframe, COLOR_BGR2RGB);
+        video_array[i].release();
         frame = im2double(rgbframe);
-        video_array[i] = rgb2ntsc(frame);
+        video_array[i] = rgb2ntsc(frame).clone();
+        frame.release();
+        rgbframe.release();
     }
     // Get ending timepoint
     auto stop = high_resolution_clock::now();
@@ -187,21 +191,27 @@ int amplify_spatial_Gdown_temporal_ideal(string inFile, string outDir, double al
         Mat frame, frame_result, filtered, rgbframe, out_frame;
 
         multiply(filtered_stack[i], color_amp, frame_result);
-        
+        filtered_stack[i].release();
         resize(frame_result, filtered, img_size, 0, 0, INTER_CUBIC);//resize image
-
+        frame_result.release();
         frame = filtered + video_array[i];
+        filtered.release();
+        video_array[i].release();
 
         frame = ntsc2rgb(frame);
-
         threshold(frame, out_frame, 0.0f, 0.0f, THRESH_TOZERO);
         threshold(out_frame, frame, 1.0f, 1.0f, THRESH_TRUNC);
+        out_frame.release();
 
         rgbframe = im2uint8(frame);
+        frame.release();
         cvtColor(rgbframe, out_frame, COLOR_RGB2BGR);
-        filtered_stack[i] = out_frame;
+        rgbframe.release();
+        filtered_stack[i] = out_frame.clone();
+        out_frame.release();
     }
-
+    video_array.clear();
+    video_array.shrink_to_fit();
 
     // Get ending timepoint
     stop = high_resolution_clock::now();
@@ -216,6 +226,8 @@ int amplify_spatial_Gdown_temporal_ideal(string inFile, string outDir, double al
         // Write the frame into the file 'outcpp.avi'
         videoOut.write(filtered_stack[i]);
     }
+    filtered_stack.clear();
+    filtered_stack.shrink_to_fit();
     // When everything done, release the video capture and write object
     videoOut.release();
     // Get ending timepoint
@@ -333,7 +345,8 @@ int amplify_spatial_lpyr_temporal_butter(string inFile, string outDir, double al
         // Capture frame-by-frame
         Mat frame;
         video.read(frame);
-        video_array[i] = frame;
+        video_array[i] = frame.clone();
+        frame.release();
     }
     // When everything done, release the video capture and write object
     video.release();
@@ -346,8 +359,11 @@ int amplify_spatial_lpyr_temporal_butter(string inFile, string outDir, double al
         // Color conversion GBR 2 NTSC
         Mat frame, rgbframe;
         cvtColor(video_array[i], rgbframe, COLOR_BGR2RGB);
+        video_array[i].release();
         frame = im2double(rgbframe);
+        rgbframe.release();
         video_array[i] = rgb2ntsc(frame);
+        frame.release();
     }
     auto stop = high_resolution_clock::now();
     auto duration = duration_cast<microseconds>(stop - start);
@@ -360,6 +376,7 @@ int amplify_spatial_lpyr_temporal_butter(string inFile, string outDir, double al
     // First frame
     // Compute the Laplace pyramid
     vector<Mat> pyr = buildLpyrfromGauss(video_array[0], max_ht);
+    video_array[0].release();
 
     vector<Mat> lowpass1 = pyr;
     vector<Mat> lowpass2 = pyr;
@@ -386,13 +403,6 @@ int amplify_spatial_lpyr_temporal_butter(string inFile, string outDir, double al
 
         // Mat frame, normalizedframe, rgbframe, out_frame, output;
         vector<Mat> filtered(nLevels);
-        // Capture frame-by-frame
-        // video.read(frame);
-
-        // Color conversion GBR 2 NTSC
-        // cvtColor(frame, rgbframe, COLOR_BGR2RGB);
-        // normalizedframe = im2double(rgbframe);
-        // frame = rgb2ntsc(normalizedframe);
 
         // Compute the Laplace pyramid
         pyr = buildLpyrfromGauss(video_array[i], max_ht); // Has information in the upper levels
@@ -410,25 +420,34 @@ int amplify_spatial_lpyr_temporal_butter(string inFile, string outDir, double al
             Mat lp2_l, pyr_l, pre_l, lp2_s, lp2_r;
 
             lp1_h = -high_b[1] * lowpass1[l].clone();
+            lowpass1[l].release();
             pyr_h = high_a[0] * pyr[l].clone();
             pre_h = high_a[1] * pyr_prev[l].clone();
-            lp1_s = lp1_h.clone() + pyr_h.clone() + pre_h.clone();
-            lp1_r = lp1_s.clone() / high_b[0];
-            lowpass1[l] = lp1_r.clone();
+            lp1_s = lp1_h + pyr_h + pre_h;
+            lp1_h.release(); pyr_h.release(); pre_h.release();
+            lp1_r = lp1_s / high_b[0];
+            lp1_s.release();
+            lowpass1[l] = lp1_r;
+            lp1_r.release();
 
             lp2_l = -low_b[1] * lowpass2[l].clone();
+            lowpass2[l].release();
             pyr_l = low_a[0] * pyr[l].clone();
             pre_l = low_a[1] * pyr_prev[l].clone();
-            lp2_s = lp2_l.clone() + pyr_l.clone() + pre_l.clone();
-            lp2_r = lp2_s.clone() / low_b[0];
-            lowpass2[l] = lp2_r.clone();
+            pyr_prev[l].release();
+            // Storing computed Laplacian pyramid as previous pyramid
+            pyr_prev[l] = pyr[l];
+            pyr[l].release();
+            lp2_s = lp2_l + pyr_l + pre_l;
+            lp2_l.release(); pyr_l.release(); pre_l.release();
+            lp2_r = lp2_s / low_b[0];
+            lp2_s.release();
+            lowpass2[l] = lp2_r;
+            lp2_r.release();
 
-            Mat temp_result = lowpass1[l].clone() - lowpass2[l].clone();
-            filtered[l] = temp_result.clone();
+            filtered[l] = lowpass1[l].clone() - lowpass2[l].clone();
         }
-        // Storing computed Laplacian pyramid as previous pyramid
-        pyr_prev = pyr;
-
+        // pyr_prev = pyr;
         // Amplify each spatial frecuency bands according to Figure 6 of our (EVM project) paper
         // Compute the representative wavelength lambda for the lowest spatial frecuency
         //  band of Laplacian pyramid
@@ -454,17 +473,27 @@ int amplify_spatial_lpyr_temporal_butter(string inFile, string outDir, double al
             }
             else if (currAlpha > alpha) { // representative lambda exceeds lambda_c
                 mat_result = alpha * filtered[l].clone();
+                filtered[l].release();
             }
             else {
                 mat_result = currAlpha * filtered[l].clone();
+                filtered[l].release();
             }
-            filtered[l] = mat_result.clone();
+            filtered[l] = mat_result;
+            mat_result.release();
 
             lambda = lambda / 2.0f;
         }
 
         filtered_stack[i-1] = reconLpyr(filtered);
+        filtered.clear();
+        filtered.shrink_to_fit();
     }
+
+    pyr.clear(); pyr.shrink_to_fit();
+    pyr_prev.clear(); pyr_prev.shrink_to_fit();
+    lowpass1.clear(); lowpass1.shrink_to_fit();
+    lowpass2.clear(); lowpass2.shrink_to_fit();
     
     // Render on the input video
     #pragma omp parallel for shared(video_array, filtered_stack) firstprivate(color_amp)
@@ -472,19 +501,21 @@ int amplify_spatial_lpyr_temporal_butter(string inFile, string outDir, double al
         Mat frame, rgbframe, outframe, output;
 
         multiply(filtered_stack[i-1], color_amp, output);
-
+        filtered_stack[i-1].release();
         output = video_array[i] + output;
-
+        video_array[i].release();
         rgbframe = ntsc2rgb(output);
-
+        output.release();
         threshold(rgbframe, outframe, 0.0f, 0.0f, THRESH_TOZERO);
         threshold(outframe, rgbframe, 1.0f, 1.0f, THRESH_TRUNC);
-
+        outframe.release();
         frame = im2uint8(rgbframe);
         cvtColor(frame, rgbframe, COLOR_RGB2BGR);
-
+        frame.release();
         filtered_stack[i-1] = rgbframe;
+        rgbframe.release();
     }
+    video_array.clear(); video_array.shrink_to_fit();
 
     // Encoding and writing the video
     cout << endl << "Writing video ";
@@ -492,7 +523,9 @@ int amplify_spatial_lpyr_temporal_butter(string inFile, string outDir, double al
     for (int i = startIndex; i < endIndex-1; i++) {
         // Write the frame into the file 'outcpp.avi'
         videoOut.write(filtered_stack[i]);
+        filtered_stack[i].release();
     }
+    filtered_stack.clear(); filtered_stack.shrink_to_fit();
     // When everything done, release the video capture and write object
     videoOut.release();
     // Get ending timepoint
@@ -962,15 +995,14 @@ vector<Mat> build_GDown_stack(vector<Mat> video_array, int startIndex, int endIn
         #pragma omp for 
         for (int i = startIndex; i < endIndex; i++) {
             // cuda::GpuMat 
-            Mat frame, rgbframe, ntscframe;
+            Mat frame;
             // vector<cuda::GpuMat>
             vector<Mat> pyr_output;
-
-            ntscframe = video_array[i];
+            frame = video_array[i];
 
             // pyr_output = buildPyramidGpu(ntscframe, level + 1);
-            buildPyramid(ntscframe, pyr_output, level + 1, BORDER_REFLECT101);
-
+            buildPyramid(frame, pyr_output, level + 1, BORDER_REFLECT101);
+            frame.release();
             GDown_stack[i] = pyr_output[level].clone();
 
             pyr_output.clear();
@@ -1054,12 +1086,15 @@ vector<Mat> ideal_bandpassing(vector<Mat> input, int dim, double wl, double wh, 
     iota(begin(Freq_temp), end(Freq_temp), 0); //0 is the starting number
 
     // Initialize the cv::Mat with the temp vector and without copying values
-    Mat Freq(Freq_temp, false);
-    double alpha = (double)samplingRate / (double)n;
+    Mat Freq(Freq_temp, true);
+    Freq_temp.clear();
+    Freq_temp.shrink_to_fit();
+
+    float alpha = (float)samplingRate / (float)n;
     Freq.convertTo(Freq, CV_32FC1, alpha); // alpha is mult to every value
 
     Mat mask = (Freq > wl) & (Freq < wh); // creates a boolean matrix/mask
-
+    Freq.release();
     // Sum of rows, columns and color channels of a single cv::Mat in input
     int total_rows = input[0].rows * input[0].cols * input[0].channels();
 
@@ -1121,6 +1156,7 @@ vector<Mat> ideal_bandpassing(vector<Mat> input, int dim, double wl, double wh, 
     // cuda::GpuMat temp_dft_gpu, input_dft_gpu, input_idft_gpu;
     // temp_dft_gpu.upload(temp_dft);
     dft(temp_dft, input_dft, DFT_ROWS | DFT_COMPLEX_OUTPUT);
+    temp_dft.release();
     // cuda::dft(temp_dft_gpu, input_dft_gpu, temp_dft_gpu.size(), DFT_ROWS);
     // input_dft_gpu.download(input_dft);
     // Testing the values in the transformation DFT [OK - Passed]
@@ -1151,6 +1187,7 @@ vector<Mat> ideal_bandpassing(vector<Mat> input, int dim, double wl, double wh, 
     // 1-D inverse DFT applied for every row, complex output 
     // Only the real part is importante
     idft(input_dft, input_idft, DFT_ROWS | DFT_COMPLEX_INPUT | DFT_SCALE);
+    input_dft.release();
     // temp_dft_gpu.upload(input_dft);
     // cuda::dft(temp_dft_gpu, input_idft_gpu, temp_dft_gpu.size(), DFT_ROWS | DFT_COMPLEX_INPUT | DFT_SCALE | DFT_INVERSE);
     // input_idft_gpu.download(input_idft);
@@ -1189,6 +1226,7 @@ vector<Mat> ideal_bandpassing(vector<Mat> input, int dim, double wl, double wh, 
             input[i] = temp_filtframe;
         }
     }
+    input_idft.release();
 
     return input;
 }
@@ -1227,10 +1265,14 @@ vector<Mat> buildLpyrfromGauss(Mat image, int levels) {
     for (int l = 0; l < levels - 1; l++) {
         Mat expandedPyramid;
         pyrUp(gaussianPyramid[l+1], expandedPyramid, Size(gaussianPyramid[l].cols, gaussianPyramid[l].rows), BORDER_REFLECT101);
-        laplacianPyramid[l] = gaussianPyramid[l] - expandedPyramid;
+        laplacianPyramid[l] = gaussianPyramid[l].clone() - expandedPyramid.clone();
+        // expandedPyramid.release();
+        // gaussianPyramid[l].release();
     }
 
-    laplacianPyramid[levels-1] = gaussianPyramid[levels-1];
+    laplacianPyramid[levels-1] = gaussianPyramid[levels-1].clone();
+    gaussianPyramid.clear();
+    gaussianPyramid.shrink_to_fit();
 
     return laplacianPyramid;
 }
