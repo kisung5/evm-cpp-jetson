@@ -37,9 +37,9 @@ vector<Mat> buildPyramidGpu(Mat frame, int maxlevel);
 
 int maxPyrHt(int frameWidth, int frameHeight, int filterSizeX, int filterSizeY);
 
-vector<Mat> buildLpyrfromGauss(Mat image, int levels);
+vector<vector<Mat>> build_Lpyr_stack(vector<Mat> video_array, int startIndex, int endIndex, int level);
 
-vector<vector<Mat>> build_Lpyr_stack(string vidFile, int startIndex, int endIndex);
+vector<Mat> buildLpyrfromGauss(Mat image, int levels);
 
 Mat reconLpyr(vector<Mat> pyr);
 
