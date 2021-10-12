@@ -7,15 +7,21 @@
 
 #include <omp.h>
 
-#include <opencv2/opencv.hpp>
 #include <opencv2/core.hpp>
 #include <opencv2/videoio.hpp>
 #include <opencv2/imgproc.hpp>
 
-#include <opencv2/core/cuda.hpp>
-// #include <opencv2/cudaimgproc.hpp>
-// #include <opencv2/cudawarping.hpp>
-// #include <opencv2/cudaarithm.hpp>
+#include "opencv2/opencv_modules.hpp"
+
+#if defined (HAVE_OPENCV_CUDAIMGPROC)
+#include <opencv2/cudaimgproc.hpp>
+#endif
+#if defined (HAVE_OPENCV_CUDAWARPING)
+#include <opencv2/cudawarping.hpp>
+#endif
+#if defined (HAVE_OPENCV_CUDAARITHM)
+#include <opencv2/cudaarithm.hpp>
+#endif
 
 #include "processing_functions.h"
 #include "im_conv.h"
@@ -106,10 +112,22 @@ int amplify_spatial_Gdown_temporal_ideal(string inFile, string outDir, double al
     cout << "Video information: Height-" << vidHeight << " Width-" << vidWidth
         << " FrameRate-" << fr << " Frames-" << len << endl;
 
+    #if defined(HAVE_OPENCV_CUDACODEC)
+
+    string gst_out = "appsrc ! video/x-raw, format=BGR ! queue ! videoconvert ! video/x-raw,format=RGBA ! nvvidconv ! nvv4l2h264enc ! h264parse ! qtmux ! filesink location=" + 
+        outName;
+    // "appsrc ! autovideoconvert ! v4l2video1h264enc extra-controls=\"encode,h264_level=10,h264_profile=4,frame_level_rate_control_enable=1,video_bitrate=2000000\" ! h264parse ! rtph264pay config-interval=1 pt=96 ! udpsink host=192.168.x.x port=5000 sync=false"
+
+    VideoWriter videoOut(gst_out, CAP_GSTREAMER, VideoWriter::fourcc('H','2','6','4'), fr, Size(vidWidth, vidHeight), true);
+
+    #else
     // Write video
     // Define the codec and create VideoWriter object
     VideoWriter videoOut(outName, CAP_FFMPEG, VideoWriter::fourcc('H','2','6','4'), fr,
-        Size(vidWidth, vidHeight));
+        Size(vidWidth, vidHeight), true);
+
+    #endif
+
 
     // Decoding and reading the video
     cout << "Reading video ";
@@ -388,6 +406,13 @@ int amplify_spatial_lpyr_temporal_butter(string inFile, string outDir, double al
     // Scalar vector for color attenuation in YIQ (NTSC) color space
     Scalar color_amp(1.0f, chromAttenuation, chromAttenuation);
 
+    // Amplify each spatial frecuency bands according to Figure 6 of our (EVM project) paper
+    // Compute the representative wavelength lambda for the lowest spatial frecuency band of Laplacian pyramid
+    // The factor to boost alpha above the bound we have in the paper. (for better visualization)
+    float exaggeration_factor = 2.0f;
+    float delta = lambda_c / 8.0f / (1.0f + alpha);
+    float lambda = pow(pow(vidHeight, 2.0f) + pow(vidWidth, 2.0f), 0.5f) / 3.0f; // is experimental constant
+
     for (int i = startIndex + 1; i < endIndex; i++) {
         progress = (float)i / endIndex;
 
@@ -402,102 +427,91 @@ int amplify_spatial_lpyr_temporal_butter(string inFile, string outDir, double al
         cout.flush();
 
         // Mat frame, normalizedframe, rgbframe, out_frame, output;
-        vector<Mat> filtered(nLevels);
+        // vector<Mat> filtered(nLevels);
 
         // Compute the Laplace pyramid
         pyr = buildLpyrfromGauss(video_array[i], max_ht); // Has information in the upper levels
 
-        // Temporal filtering
-        // With OpenCV methods, we are accomplishing this:
-        //  lowpass1 = (lowpass1 * -high_b[1] + pyr * high_a[0] + pyr_prev * high_a[1]) /
-        //      high_b[0];
-        //  lowpass2 = (lowpass2 * -low_b[1] + pyr * low_a[0] + pyr_prev * low_a[1]) /
-        //      low_b[0];
-        #pragma omp parallel for firstprivate(low_a, low_b, high_a, high_b, pyr_prev, pyr) \
-            shared(lowpass1, lowpass2, filtered)
-        for (int l = 0; l < nLevels; l++) {
-            Mat lp1_h, pyr_h, pre_h, lp1_s, lp1_r;
-            Mat lp2_l, pyr_l, pre_l, lp2_s, lp2_r;
+        #pragma omp parallel shared(lowpass1, lowpass2, pyr_prev, pyr)
+        {
+            // Temporal filtering
+            // With OpenCV methods, we are accomplishing this:
+            //  lowpass1 = (lowpass1 * -high_b[1] + pyr * high_a[0] + pyr_prev * high_a[1]) /
+            //      high_b[0];
+            //  lowpass2 = (lowpass2 * -low_b[1] + pyr * low_a[0] + pyr_prev * low_a[1]) /
+            //      low_b[0];
+            // #pragma omp parallel for firstprivate(low_a, low_b, high_a, high_b) \
+            //     shared(lowpass1, lowpass2, pyr_prev, pyr)
+            #pragma omp for firstprivate(low_a, low_b, high_a, high_b)
+            for (int l = 0; l < nLevels; l++) {
+                Mat lp1_h, pyr_h, pre_h, lp1_s/*, lp1_r*/;
+                Mat lp2_l, pyr_l, pre_l, lp2_s/*, lp2_r*/;
 
-            lp1_h = -high_b[1] * lowpass1[l].clone();
-            lowpass1[l].release();
-            pyr_h = high_a[0] * pyr[l].clone();
-            pre_h = high_a[1] * pyr_prev[l].clone();
-            lp1_s = lp1_h + pyr_h + pre_h;
-            lp1_h.release(); pyr_h.release(); pre_h.release();
-            lp1_r = lp1_s / high_b[0];
-            lp1_s.release();
-            lowpass1[l] = lp1_r;
-            lp1_r.release();
+                lp1_h = -high_b[1] * lowpass1[l].clone();
+                lowpass1[l].release();
+                pyr_h = high_a[0] * pyr[l].clone();
+                pre_h = high_a[1] * pyr_prev[l].clone();
+                lp1_s = lp1_h + pyr_h + pre_h;
+                lp1_h.release(); pyr_h.release(); pre_h.release();
+                lowpass1[l] = lp1_s / high_b[0];
+                lp1_s.release();
+                // lowpass1[l] = lp1_r;
+                // lp1_r.release();
 
-            lp2_l = -low_b[1] * lowpass2[l].clone();
-            lowpass2[l].release();
-            pyr_l = low_a[0] * pyr[l].clone();
-            pre_l = low_a[1] * pyr_prev[l].clone();
-            pyr_prev[l].release();
-            // Storing computed Laplacian pyramid as previous pyramid
-            pyr_prev[l] = pyr[l];
-            pyr[l].release();
-            lp2_s = lp2_l + pyr_l + pre_l;
-            lp2_l.release(); pyr_l.release(); pre_l.release();
-            lp2_r = lp2_s / low_b[0];
-            lp2_s.release();
-            lowpass2[l] = lp2_r;
-            lp2_r.release();
+                lp2_l = -low_b[1] * lowpass2[l].clone();
+                lowpass2[l].release();
+                pyr_l = low_a[0] * pyr[l].clone();
+                pre_l = low_a[1] * pyr_prev[l].clone();
+                pyr_prev[l].release();
+                // Storing computed Laplacian pyramid as previous pyramid
+                pyr_prev[l] = pyr[l];
+                pyr[l].release();
+                lp2_s = lp2_l + pyr_l + pre_l;
+                lp2_l.release(); pyr_l.release(); pre_l.release();
+                lowpass2[l] = lp2_s / low_b[0];
+                lp2_s.release();
+                // lowpass2[l] = lp2_r;
+                // lp2_r.release();
 
-            filtered[l] = lowpass1[l] - lowpass2[l];
-        }
-        // pyr_prev = pyr;
-        // Amplify each spatial frecuency bands according to Figure 6 of our (EVM project) paper
-        // Compute the representative wavelength lambda for the lowest spatial frecuency
-        //  band of Laplacian pyramid
-
-        // The factor to boost alpha above the bound we have in the paper. (for better visualization)
-        float exaggeration_factor = 2.0f;
-        float delta = lambda_c / 8.0f / (1.0f + alpha);
-        float lambda = pow(pow(vidHeight, 2.0f) + pow(vidWidth, 2.0f), 0.5f) / 3.0f; // is experimental constant
-
-        #pragma omp parallel for shared(filtered) firstprivate(alpha, exaggeration_factor, delta, lambda)
-        for (int l = nLevels - 1; l >= 0; l--) {
-            // go one level down on pyramid each stage
-
-            // Compute modified alpha for this level
-            float currAlpha = lambda / delta / 8.0f - 1.0f;
-            currAlpha = currAlpha * exaggeration_factor;
-
-            Mat mat_result;
-
-            if (l == nLevels - 1 || l == 0) { // ignore the highest and lowest frecuency band
-                Size mat_sz(filtered[l].cols, filtered[l].rows);
-                mat_result = Mat::zeros(mat_sz, CV_32FC3);
+                pyr[l] = lowpass1[l] - lowpass2[l];
             }
-            else if (currAlpha > alpha) { // representative lambda exceeds lambda_c
-                mat_result = alpha * filtered[l].clone();
-                filtered[l].release();
-            }
-            else {
-                mat_result = currAlpha * filtered[l].clone();
-                filtered[l].release();
-            }
-            filtered[l] = mat_result;
-            mat_result.release();
 
-            lambda = lambda / 2.0f;
+            // #pragma omp parallel for shared(pyr) firstprivate(alpha, exaggeration_factor, delta, lambda)
+            #pragma omp for firstprivate(alpha, exaggeration_factor, delta, lambda)
+            for (int l = nLevels - 1; l >= 0; l--) {
+                // go one level down on pyramid each stage
+
+                // Compute modified alpha for this level
+                float currAlpha = lambda / delta / 8.0f - 1.0f;
+                currAlpha = currAlpha * exaggeration_factor;
+
+                Mat mat_result;
+
+                if (l == nLevels - 1 || l == 0) { // ignore the highest and lowest frecuency band
+                    Size mat_sz(pyr[l].cols, pyr[l].rows);
+                    mat_result = Mat::zeros(mat_sz, CV_32FC3);
+                }
+                else if (currAlpha > alpha) { // representative lambda exceeds lambda_c
+                    mat_result = alpha * pyr[l].clone();
+                    pyr[l].release();
+                }
+                else {
+                    mat_result = currAlpha * pyr[l].clone();
+                    pyr[l].release();
+                }
+                pyr[l] = mat_result;
+                mat_result.release();
+
+                lambda = lambda / 2.0f;
+            }
         }
 
-        filtered_stack[i-1] = reconLpyr(filtered);
-        vector<Mat>().swap(filtered);
-        // filtered.clear();
-        // filtered.shrink_to_fit();
+        filtered_stack[i-1] = reconLpyr(pyr);
+        vector<Mat>().swap(pyr);
     }
-    vector<Mat>().swap(pyr);
     vector<Mat>().swap(pyr_prev);
     vector<Mat>().swap(lowpass1);
     vector<Mat>().swap(lowpass2);
-    // pyr.clear(); pyr.shrink_to_fit();
-    // pyr_prev.clear(); pyr_prev.shrink_to_fit();
-    // lowpass1.clear(); lowpass1.shrink_to_fit();
-    // lowpass2.clear(); lowpass2.shrink_to_fit();
     
     // Render on the input video
     #pragma omp parallel for shared(video_array, filtered_stack) firstprivate(color_amp)

@@ -5,6 +5,7 @@
 
 #include <iostream>
 #include <opencv2/opencv.hpp>
+#include <opencv2/core/cuda.hpp>
 
 using namespace std;
 using namespace cv;
@@ -33,7 +34,7 @@ Spatial filter functions
 
 vector<Mat> build_GDown_stack(vector<Mat> video_array, int startIndex, int endIndex, int level);
 
-// vector<Mat> buildPyramidGpu(Mat frame, int maxlevel);
+vector<Mat> buildPyramidGpu(Mat frame, int maxlevel);
 
 int maxPyrHt(int frameWidth, int frameHeight, int filterSizeX, int filterSizeY);
 
