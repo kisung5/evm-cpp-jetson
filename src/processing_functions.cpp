@@ -112,11 +112,20 @@ int amplify_spatial_Gdown_temporal_ideal(string inFile, string outDir, double al
     cout << "Video information: Height-" << vidHeight << " Width-" << vidWidth
         << " FrameRate-" << fr << " Frames-" << len << endl;
 
-    #if defined(HAVE_OPENCV_CUDACODEC)
-    string gst_out = "appsrc ! video/x-raw, format=BGR ! queue ! videoconvert ! video/x-raw,format=RGBA !"
-        " nvvidconv ! nvv4l2h264enc ! h264parse ! qtmux ! filesink location=" + outName;
-    VideoWriter videoOut(gst_out, CAP_GSTREAMER, VideoWriter::fourcc('H','2','6','4'), fr, 
+    #if defined(HAVE_OPENCV_CUDACODEC) 
+    VideoWriter videoOut;
+    if (vidWidth < vidHeight) {
+        videoOut.open(outName, CAP_FFMPEG, VideoWriter::fourcc('H','2','6','4'), fr,
         Size(vidWidth, vidHeight), true);
+    }
+    else {
+        string gst_out = "appsrc ! video/x-raw, format=BGR, width=" + to_string(vidWidth) + 
+            ", height=" + to_string(vidHeight) + 
+            " ! queue ! videoconvert ! video/x-raw, format=RGBA !"
+            " nvvidconv ! nvv4l2h264enc maxperf-enable=1 ! h264parse ! qtmux ! filesink location=" + outName;
+        videoOut.open(gst_out, CAP_GSTREAMER, VideoWriter::fourcc('H','2','6','4'), fr, 
+            Size(vidWidth, vidHeight), true);
+    }
     #else
     // Write video
     // Define the codec and create VideoWriter object
@@ -343,10 +352,19 @@ int amplify_spatial_lpyr_temporal_butter(string inFile, string outDir, double al
         << " FrameRate-" << fr << " Frames-" << len << endl;
 
     #if defined(HAVE_OPENCV_CUDACODEC)
-    string gst_out = "appsrc ! video/x-raw, format=BGR ! queue ! videoconvert ! video/x-raw,format=RGBA !"
-        " nvvidconv ! nvv4l2h264enc ! h264parse ! qtmux ! filesink location=" + outName;
-    VideoWriter videoOut(gst_out, CAP_GSTREAMER, VideoWriter::fourcc('H','2','6','4'), fr, 
+    VideoWriter videoOut;
+    if (vidWidth < vidHeight) {
+        videoOut.open(outName, CAP_FFMPEG, VideoWriter::fourcc('H','2','6','4'), fr,
         Size(vidWidth, vidHeight), true);
+    }
+    else {
+        string gst_out = "appsrc ! video/x-raw, format=BGR, width=" + to_string(vidWidth) + 
+            ", height=" + to_string(vidHeight) + 
+            " ! queue ! videoconvert ! video/x-raw, format=RGBA !"
+            " nvvidconv ! nvv4l2h264enc maxperf-enable=1 ! h264parse ! qtmux ! filesink location=" + outName;
+        videoOut.open(gst_out, CAP_GSTREAMER, VideoWriter::fourcc('H','2','6','4'), fr, 
+            Size(vidWidth, vidHeight), true);
+    }
     #else
     // Write video
     // Define the codec and create VideoWriter object
@@ -610,10 +628,19 @@ int amplify_spatial_lpyr_temporal_ideal(string inFile, string outDir, double alp
         << " FrameRate-" << fr << " Frames-" << len << endl;
 
     #if defined(HAVE_OPENCV_CUDACODEC)
-    string gst_out = "appsrc ! video/x-raw, format=BGR ! queue ! videoconvert ! video/x-raw,format=RGBA !"
-        " nvvidconv ! nvv4l2h264enc ! h264parse ! qtmux ! filesink location=" + outName;
-    VideoWriter videoOut(gst_out, CAP_GSTREAMER, VideoWriter::fourcc('H','2','6','4'), fr, 
+    VideoWriter videoOut;
+    if (vidWidth + 50 < vidHeight) {
+        videoOut.open(outName, CAP_FFMPEG, VideoWriter::fourcc('H','2','6','4'), fr,
         Size(vidWidth, vidHeight), true);
+    }
+    else {
+        string gst_out = "appsrc ! video/x-raw, format=BGR, width=" + to_string(vidWidth) + 
+            ", height=" + to_string(vidHeight) + 
+            " ! queue ! videoconvert ! video/x-raw, format=RGBA !"
+            " nvvidconv ! nvv4l2h264enc maxperf-enable=1 ! h264parse ! qtmux ! filesink location=" + outName;
+        videoOut.open(gst_out, CAP_GSTREAMER, VideoWriter::fourcc('H','2','6','4'), fr, 
+            Size(vidWidth, vidHeight), true);
+    }
     #else
     // Write video
     // Define the codec and create VideoWriter object

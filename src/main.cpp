@@ -36,9 +36,12 @@ int main(int argc, const char* argv[]) {
     string dataDir = "./vid/";
     string resultsDir = "./Results/";
 
+    utils::fs::remove_all(resultsDir);
+
     if (utils::fs::createDirectory(resultsDir) != 0)
     {
         cout << "Not able to create the directory" << endl;
+        
     }
 
     // Color Magnification
