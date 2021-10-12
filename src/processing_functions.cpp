@@ -113,21 +113,16 @@ int amplify_spatial_Gdown_temporal_ideal(string inFile, string outDir, double al
         << " FrameRate-" << fr << " Frames-" << len << endl;
 
     #if defined(HAVE_OPENCV_CUDACODEC)
-
-    string gst_out = "appsrc ! video/x-raw, format=BGR ! queue ! videoconvert ! video/x-raw,format=RGBA ! nvvidconv ! nvv4l2h264enc ! h264parse ! qtmux ! filesink location=" + 
-        outName;
-    // "appsrc ! autovideoconvert ! v4l2video1h264enc extra-controls=\"encode,h264_level=10,h264_profile=4,frame_level_rate_control_enable=1,video_bitrate=2000000\" ! h264parse ! rtph264pay config-interval=1 pt=96 ! udpsink host=192.168.x.x port=5000 sync=false"
-
-    VideoWriter videoOut(gst_out, CAP_GSTREAMER, VideoWriter::fourcc('H','2','6','4'), fr, Size(vidWidth, vidHeight), true);
-
+    string gst_out = "appsrc ! video/x-raw, format=BGR ! queue ! videoconvert ! video/x-raw,format=RGBA !" + 
+        " nvvidconv ! nvv4l2h264enc ! h264parse ! qtmux ! filesink location=" + outName;
+    VideoWriter videoOut(gst_out, CAP_GSTREAMER, VideoWriter::fourcc('H','2','6','4'), fr, 
+        Size(vidWidth, vidHeight), true);
     #else
     // Write video
     // Define the codec and create VideoWriter object
     VideoWriter videoOut(outName, CAP_FFMPEG, VideoWriter::fourcc('H','2','6','4'), fr,
         Size(vidWidth, vidHeight), true);
-
     #endif
-
 
     // Decoding and reading the video
     cout << "Reading video ";
@@ -228,8 +223,7 @@ int amplify_spatial_Gdown_temporal_ideal(string inFile, string outDir, double al
         filtered_stack[i] = out_frame.clone();
         out_frame.release();
     }
-    video_array.clear();
-    video_array.shrink_to_fit();
+    vector<Mat>().swap(video_array);
 
     // Get ending timepoint
     stop = high_resolution_clock::now();
@@ -244,8 +238,7 @@ int amplify_spatial_Gdown_temporal_ideal(string inFile, string outDir, double al
         // Write the frame into the file 'outcpp.avi'
         videoOut.write(filtered_stack[i]);
     }
-    filtered_stack.clear();
-    filtered_stack.shrink_to_fit();
+    vector<Mat>().swap(filtered_stack);
     // When everything done, release the video capture and write object
     videoOut.release();
     // Get ending timepoint
@@ -349,10 +342,17 @@ int amplify_spatial_lpyr_temporal_butter(string inFile, string outDir, double al
     cout << "Video information: Height-" << vidHeight << " Width-" << vidWidth
         << " FrameRate-" << fr << " Frames-" << len << endl;
 
+    #if defined(HAVE_OPENCV_CUDACODEC)
+    string gst_out = "appsrc ! video/x-raw, format=BGR ! queue ! videoconvert ! video/x-raw,format=RGBA !" + 
+        " nvvidconv ! nvv4l2h264enc ! h264parse ! qtmux ! filesink location=" + outName;
+    VideoWriter videoOut(gst_out, CAP_GSTREAMER, VideoWriter::fourcc('H','2','6','4'), fr, 
+        Size(vidWidth, vidHeight), true);
+    #else
     // Write video
     // Define the codec and create VideoWriter object
     VideoWriter videoOut(outName, CAP_FFMPEG, VideoWriter::fourcc('H','2','6','4'), fr,
-        Size(vidWidth, vidHeight));
+        Size(vidWidth, vidHeight), true);
+    #endif
 
     // Decoding and reading the video
     cout << "Reading video ";
@@ -387,7 +387,6 @@ int amplify_spatial_lpyr_temporal_butter(string inFile, string outDir, double al
     auto duration = duration_cast<microseconds>(stop - start);
     cout << "- Time: " << duration.count() << " microseconds" << endl;
 
-
     // Compute maximum pyramid height for every frame
     int max_ht = 1 + maxPyrHt(vidWidth, vidHeight, MAX_FILTER_SIZE, MAX_FILTER_SIZE);
 
@@ -402,7 +401,7 @@ int amplify_spatial_lpyr_temporal_butter(string inFile, string outDir, double al
 
     int nLevels = (int)pyr.size();
 
-    vector<Mat> filtered_stack(endIndex - startIndex - 1);
+    // vector<Mat> filtered_stack(endIndex - startIndex - 1);
     // Scalar vector for color attenuation in YIQ (NTSC) color space
     Scalar color_amp(1.0f, chromAttenuation, chromAttenuation);
 
@@ -506,20 +505,11 @@ int amplify_spatial_lpyr_temporal_butter(string inFile, string outDir, double al
             }
         }
 
-        filtered_stack[i-1] = reconLpyr(pyr);
-        vector<Mat>().swap(pyr);
-    }
-    vector<Mat>().swap(pyr_prev);
-    vector<Mat>().swap(lowpass1);
-    vector<Mat>().swap(lowpass2);
-    
-    // Render on the input video
-    #pragma omp parallel for shared(video_array, filtered_stack) firstprivate(color_amp)
-    for (int i = startIndex + 1; i < endIndex; i++) {
         Mat frame, rgbframe, outframe, output;
 
-        multiply(filtered_stack[i-1], color_amp, output);
-        filtered_stack[i-1].release();
+        multiply(reconLpyr(pyr), color_amp, output);
+        vector<Mat>().swap(pyr);
+        // filtered_stack[i-1].release();
         output = video_array[i] + output;
         video_array[i].release();
         rgbframe = ntsc2rgb(output);
@@ -530,28 +520,17 @@ int amplify_spatial_lpyr_temporal_butter(string inFile, string outDir, double al
         frame = im2uint8(rgbframe);
         cvtColor(frame, rgbframe, COLOR_RGB2BGR);
         frame.release();
-        filtered_stack[i-1] = rgbframe;
+        videoOut.write(rgbframe);
+        // video_array[i].release();
+        // video_array[i-1] = rgbframe;
         rgbframe.release();
     }
+    vector<Mat>().swap(pyr_prev);
+    vector<Mat>().swap(lowpass1);
+    vector<Mat>().swap(lowpass2);
     vector<Mat>().swap(video_array);
-    // video_array.clear(); video_array.shrink_to_fit();
 
-    // Encoding and writing the video
-    cout << endl << "Writing video ";
-    start = high_resolution_clock::now();
-    for (int i = startIndex; i < endIndex-1; i++) {
-        // Write the frame into the file 'outcpp.avi'
-        videoOut.write(filtered_stack[i]);
-        filtered_stack[i].release();
-    }
-    vector<Mat>().swap(filtered_stack);
-    // filtered_stack.clear(); filtered_stack.shrink_to_fit();
-    // When everything done, release the video capture and write object
     videoOut.release();
-    // Get ending timepoint
-    stop = high_resolution_clock::now();
-    duration = duration_cast<microseconds>(stop - start);
-    cout << "- Time: " << duration.count() << " microseconds" << endl;
 
     etime = omp_get_wtime();
 
@@ -630,10 +609,17 @@ int amplify_spatial_lpyr_temporal_ideal(string inFile, string outDir, double alp
     cout << "Video information: Height-" << vidHeight << " Width-" << vidWidth
         << " FrameRate-" << fr << " Frames-" << len << endl;
 
+    #if defined(HAVE_OPENCV_CUDACODEC)
+    string gst_out = "appsrc ! video/x-raw, format=BGR ! queue ! videoconvert ! video/x-raw,format=RGBA !" + 
+        " nvvidconv ! nvv4l2h264enc ! h264parse ! qtmux ! filesink location=" + outName;
+    VideoWriter videoOut(gst_out, CAP_GSTREAMER, VideoWriter::fourcc('H','2','6','4'), fr, 
+        Size(vidWidth, vidHeight), true);
+    #else
     // Write video
     // Define the codec and create VideoWriter object
     VideoWriter videoOut(outName, CAP_FFMPEG, VideoWriter::fourcc('H','2','6','4'), fr,
-        Size(vidWidth, vidHeight));
+        Size(vidWidth, vidHeight), true);
+    #endif
 
     // Decoding and reading the video
     cout << "Reading video ";
@@ -645,6 +631,7 @@ int amplify_spatial_lpyr_temporal_ideal(string inFile, string outDir, double alp
         Mat frame;
         video.read(frame);
         video_array[i] = frame;
+        frame.release();
     }
     // When everything done, release the video capture and write object
     video.release();
@@ -654,8 +641,11 @@ int amplify_spatial_lpyr_temporal_ideal(string inFile, string outDir, double alp
         // Color conversion GBR 2 NTSC
         Mat frame, rgbframe;
         cvtColor(video_array[i], rgbframe, COLOR_BGR2RGB);
+        video_array[i].release();
         frame = im2double(rgbframe);
+        rgbframe.release();
         video_array[i] = rgb2ntsc(frame);
+        frame.release();
     }
     auto stop = high_resolution_clock::now();
     auto duration = duration_cast<microseconds>(stop - start);
@@ -679,6 +669,7 @@ int amplify_spatial_lpyr_temporal_ideal(string inFile, string outDir, double alp
     // Get starting timepoint
     start = high_resolution_clock::now();
     vector<vector<Mat>> filteredStack = ideal_bandpassing_lpyr(pyr_stack, 3, fl, fh, samplingRate);
+    vector<vector<Mat>>().swap(pyr_stack);
     // Get ending timepoint
     stop = high_resolution_clock::now();
     duration = duration_cast<microseconds>(stop - start);
@@ -688,37 +679,45 @@ int amplify_spatial_lpyr_temporal_ideal(string inFile, string outDir, double alp
     Size img_size(vidWidth, vidHeight);//the dst image size,e.g.100x100
     vector<Mat> filtered_stack(endIndex - startIndex);
 
-    #pragma omp parallel shared(video_array, filteredStack, filtered_stack) \
-        firstprivate(colorAmp, img_size)
+    #pragma omp parallel shared(video_array, filteredStack, filtered_stack)
     {
         // Amplify color channels in NTSC
-        #pragma omp for collapse(2)
+        #pragma omp for collapse(2) firstprivate(colorAmp)
         for (int i = startIndex; i < endIndex; i++) {
             for (int levelFrame = 0; levelFrame < filteredStack[0].size(); levelFrame++) {
                 multiply(filteredStack[i][levelFrame], colorAmp, filteredStack[i][levelFrame]);
             }
         }
 
-        #pragma omp for
+        #pragma omp for firstprivate(img_size)
         for (int i = startIndex; i < endIndex; i++) {
-            Mat frame, rgbframe, ntscframe, filt_ind, filtered, out_frame;
+            Mat frame, rgbframe, filt_ind, filtered, out_frame;
 
             filt_ind = filteredStack[i][0];
+            filteredStack[i][0].release();
+            vector<Mat>().swap(filteredStack[i]);
 
             resize(filt_ind, filtered, img_size, 0, 0, INTER_CUBIC);//resize image
 
-            filtered = filtered + video_array[i];
+            filtered = filtered + video_array[i].clone();
+            video_array[i].release();
 
             frame = ntsc2rgb(filtered);
+            filtered.release();
 
             threshold(frame, out_frame, 0.0f, 0.0f, THRESH_TOZERO);
             threshold(out_frame, frame, 1.0f, 1.0f, THRESH_TRUNC);
 
             rgbframe = im2uint8(frame);
+            frame.release();
             cvtColor(rgbframe, out_frame, COLOR_RGB2BGR);
+            rgbframe.release();
             filtered_stack[i] = out_frame;
+            out_frame.release();
         }
     }
+    vector<vector<Mat>>().swap(filteredStack);
+    vector<Mat>().swap(video_array);
 
     // Get ending timepoint
     stop = high_resolution_clock::now();
@@ -731,7 +730,9 @@ int amplify_spatial_lpyr_temporal_ideal(string inFile, string outDir, double alp
     for (int i = startIndex; i < endIndex; i++) {
         // Write the frame into the file 'outcpp.avi'
         videoOut.write(filtered_stack[i]);
+        filtered_stack[i].release();
     }
+    vector<Mat>().swap(filtered_stack);
     videoOut.release();
     // Get ending timepoint
     stop = high_resolution_clock::now();
@@ -1025,8 +1026,7 @@ vector<Mat> build_GDown_stack(vector<Mat> video_array, int startIndex, int endIn
             frame.release();
             GDown_stack[i] = pyr_output[level].clone();
 
-            pyr_output.clear();
-            pyr_output.shrink_to_fit();
+            vector<Mat>().swap(pyr_output);
         }
     }
 
@@ -1107,9 +1107,7 @@ vector<Mat> ideal_bandpassing(vector<Mat> input, int dim, double wl, double wh, 
 
     // Initialize the cv::Mat with the temp vector and without copying values
     Mat Freq(Freq_temp, true);
-    Freq_temp.clear();
-    Freq_temp.shrink_to_fit();
-
+    vector<int>().swap(Freq_temp);
     float alpha = (float)samplingRate / (float)n;
     Freq.convertTo(Freq, CV_32FC1, alpha); // alpha is mult to every value
 
@@ -1145,10 +1143,10 @@ vector<Mat> ideal_bandpassing(vector<Mat> input, int dim, double wl, double wh, 
     Mat input_dft, input_idft; // For DFT input / output 
 
     // Here we populate the forementioned matrix
-    #pragma omp parallel shared(temp_dft) firstprivate(input)
+    #pragma omp parallel shared(temp_dft) 
     // #pragma omp parallel shared(input, temp_dft, input_dft, input_idft)
     {
-        #pragma omp for collapse(3) 
+        #pragma omp for collapse(3) firstprivate(input)
         for (int x = 0; x < input[0].rows; x++) {
             for (int y = 0; y < input[0].cols; y++) {
                 for (int i = 0; i < n; i++) {
@@ -1291,8 +1289,6 @@ vector<Mat> buildLpyrfromGauss(Mat image, int levels) {
     }
 
     laplacianPyramid[levels-1] = gaussianPyramid[levels-1];
-    gaussianPyramid.clear();
-    gaussianPyramid.shrink_to_fit();
 
     return laplacianPyramid;
 }
@@ -1303,21 +1299,15 @@ vector<vector<Mat>> build_Lpyr_stack(vector<Mat> video_array, int startIndex, in
     int t_size = endIndex - startIndex;
     vector<vector<Mat>> pyr_stack(t_size, vector<Mat>(max_ht));
 
-    #pragma omp parallel shared(video_array, pyr_stack)
-    {   
-        #pragma omp for 
-        for (int i = startIndex; i < endIndex; i++) {
-            // Define variables
-            Mat frame, rgbframe, ntscframe;
+    #pragma omp parallel for shared(video_array, pyr_stack)
+    for (int i = startIndex; i < endIndex; i++) {
+        // Define variables
+        Mat frame;
 
-            ntscframe = video_array[i];
-
-            vector<Mat> pyr_output = buildLpyrfromGauss(ntscframe, max_ht);
-            pyr_stack[i] = pyr_output;
-
-            pyr_output.clear();
-            pyr_output.shrink_to_fit();
-        }
+        frame = video_array[i].clone();
+        vector<Mat> pyr_output = buildLpyrfromGauss(frame, max_ht);
+        frame.release();
+        pyr_stack[i] = pyr_output;
     }
 
     return pyr_stack;
@@ -1377,7 +1367,6 @@ vector<vector<Mat>> ideal_bandpassing_lpyr(vector<vector<Mat>>& input, int dim, 
     // Represents time
     int n = (int)input.size();
 
-
     // Temporal vector that's constructed for the mask
     // iota is used to fill the vector with a integer sequence 
     // [0, 1, 2, ..., n]
@@ -1385,12 +1374,13 @@ vector<vector<Mat>> ideal_bandpassing_lpyr(vector<vector<Mat>>& input, int dim, 
     iota(begin(Freq_temp), end(Freq_temp), 0); //0 is the starting number
 
     // Initialize the cv::Mat with the temp vector and without copying values
-    Mat Freq(Freq_temp, false);
-    double alpha = (double)samplingRate / (double)n;
+    Mat Freq(Freq_temp, true);
+    vector<int>().swap(Freq_temp);
+    float alpha = (float)samplingRate / (float)n;
     Freq.convertTo(Freq, CV_32FC1, alpha);
 
     Mat mask = (Freq > wl) & (Freq < wh); // creates a boolean matrix/mask
-
+    Freq.release();
     // Sum of total pixels to be processed
     int total_pixels = 0;
     int levels = (int)input[0].size();
@@ -1429,7 +1419,7 @@ vector<vector<Mat>> ideal_bandpassing_lpyr(vector<vector<Mat>>& input, int dim, 
 
     // Here we populate the forementioned matrix
     // 14.99 s
-    #pragma omp parallel shared(tmp) firstprivate(input)
+    #pragma omp parallel shared(tmp, input) 
     {
         for (int level = 0; level < levels; level++) {
             #pragma omp for collapse(3)
@@ -1502,6 +1492,7 @@ vector<vector<Mat>> ideal_bandpassing_lpyr(vector<vector<Mat>>& input, int dim, 
                 }
             }
             levelsVector[level] = temp_filtframe.clone();
+            temp_filtframe.release();
         }
         filtered[i] = levelsVector;
     }

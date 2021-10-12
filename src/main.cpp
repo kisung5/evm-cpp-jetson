@@ -63,10 +63,10 @@ int main(int argc, const char* argv[]) {
     int status9 = amplify_spatial_lpyr_temporal_butter(dataDir + "face2.mp4", resultsDir,
         20.0f, 80.0f, 0.5f, 10.0f, 30, 0.0f);
     // Ideal
-    // int status10 = amplify_spatial_lpyr_temporal_ideal(dataDir + "guitar.mp4", resultsDir,
-    //     50, 10, 72.0f, 92.0f, 600, 0);
-    // int status11 = amplify_spatial_lpyr_temporal_ideal(dataDir + "guitar.mp4", resultsDir,
-    //     100, 10, 100.0f, 120.0f, 600, 0);
+    int status10 = amplify_spatial_lpyr_temporal_ideal(dataDir + "guitar.mp4", resultsDir,
+        50, 10, 72.0f, 92.0f, 600, 0);
+    int status11 = amplify_spatial_lpyr_temporal_ideal(dataDir + "guitar.mp4", resultsDir,
+        100, 10, 100.0f, 120.0f, 600, 0);
     // IIR
     // int status12 = amplify_spatial_lpyr_temporal_iir(dataDir + "baby.mp4", resultsDir,
     //     10.0f, 16.0f, 0.4f, 0.05f, 0.1f);
