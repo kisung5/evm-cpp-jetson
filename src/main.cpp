@@ -42,12 +42,12 @@ int main(int argc, const char* argv[]) {
     }
 
     // Color Magnification
-    // int status1 = amplify_spatial_Gdown_temporal_ideal(dataDir + "baby2.mp4", resultsDir, 
-    //     150, 6, 140.0f / 60.0f, 160.0f / 60.0f, 30, 1);
-    // int status2 = amplify_spatial_Gdown_temporal_ideal(dataDir + "face.mp4", resultsDir, 
-    //     50, 4, 50.0f / 60.0f, 60.0f / 60.0f, 30, 1);
-    // int status3 = amplify_spatial_Gdown_temporal_ideal(dataDir + "face2.mp4", resultsDir, 
-    //     50, 6, 50.0f / 60.0f, 60.0f / 60.0f, 30, 1);
+    int status1 = amplify_spatial_Gdown_temporal_ideal(dataDir + "baby2.mp4", resultsDir, 
+        150, 6, 140.0f / 60.0f, 160.0f / 60.0f, 30, 1);
+    int status2 = amplify_spatial_Gdown_temporal_ideal(dataDir + "face.mp4", resultsDir, 
+        50, 4, 50.0f / 60.0f, 60.0f / 60.0f, 30, 1);
+    int status3 = amplify_spatial_Gdown_temporal_ideal(dataDir + "face2.mp4", resultsDir, 
+        50, 6, 50.0f / 60.0f, 60.0f / 60.0f, 30, 1);
     // Motion Magnification
     // Butter
     int status4 = amplify_spatial_lpyr_temporal_butter(dataDir + "baby.mp4", resultsDir,
