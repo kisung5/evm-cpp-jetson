@@ -73,11 +73,11 @@ int main(int argc, const char* argv[]) {
     // int status13 = amplify_spatial_lpyr_temporal_iir(dataDir + "wrist.mp4", resultsDir, 
     //     10.0f, 16.0f, 0.4f, 0.05f, 0.1f);
 
-    // int status = status1 + status2 + status3 + status4 + status5 + status6 + status7 + status8 +
-    //     status9 + status10 + status11/* + status12 + status13*/;
-    // if (status < 0) {
-    //     return -1;
-    // }
+    int status = status1 + status2 + status3 + status4 + status5 + status6 + status7 + status8 +
+        status9 + status10 + status11/* + status12 + status13*/;
+    if (status < 0) {
+        return -1;
+    }
   
     return 0;
 }
