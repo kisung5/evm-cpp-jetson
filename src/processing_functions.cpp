@@ -1060,22 +1060,23 @@ vector<Mat> build_GDown_stack(vector<Mat> video_array, int startIndex, int endIn
     return GDown_stack;
 }
 
+#if defined (HAVE_OPENCV_CUDAWARPING)
+vector<GpuMat> buildPyramidGpu(GpuMat frame, int maxlevel) {
 
-// vector<Mat> buildPyramidGpu(Mat frame, int maxlevel) {
+    vector<GpuMat> pyr_output(maxlevel);
 
-//     vector<Mat> pyr_output(maxlevel);
+    pyr_output[0] = frame.clone();
 
-//     pyr_output[0] = frame.clone();
+    for(int level = 0; level < maxlevel-1; level++) {
+        // cuda::GpuMat gpu_src, gpu_dest;
+        // gpu_src.upload();
+        cuda::pyrDown(pyr_output[level], pyr_output[level+1]);
+        // gpu_dest.download(pyr_output[level+1]);
+    }
 
-//     for(int level = 0; level < maxlevel-1; level++) {
-//         cuda::GpuMat gpu_src, gpu_dest;
-//         gpu_src.upload(pyr_output[level]);
-//         cuda::pyrDown(gpu_src, gpu_dest);
-//         gpu_dest.download(pyr_output[level+1]);
-//     }
-
-//     return pyr_output;
-// }
+    return pyr_output;
+}
+#endif
 
 
 /**

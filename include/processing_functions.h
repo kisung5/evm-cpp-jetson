@@ -34,7 +34,9 @@ Spatial filter functions
 
 vector<Mat> build_GDown_stack(vector<Mat> video_array, int startIndex, int endIndex, int level);
 
-vector<Mat> buildPyramidGpu(Mat frame, int maxlevel);
+#if defined (HAVE_OPENCV_CUDAWARPING)
+vector<GpuMat> buildPyramidGpu(GpuMat frame, int maxlevel);
+#endif
 
 int maxPyrHt(int frameWidth, int frameHeight, int filterSizeX, int filterSizeY);
 
