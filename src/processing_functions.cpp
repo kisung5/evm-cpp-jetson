@@ -1061,9 +1061,9 @@ vector<Mat> build_GDown_stack(vector<Mat> video_array, int startIndex, int endIn
 }
 
 #if defined (HAVE_OPENCV_CUDAWARPING)
-vector<GpuMat> buildPyramidGpu(GpuMat frame, int maxlevel) {
+vector<cuda::GpuMat> buildPyramidGpu(cuda::GpuMat frame, int maxlevel) {
 
-    vector<GpuMat> pyr_output(maxlevel);
+    vector<cuda::GpuMat> pyr_output(maxlevel);
 
     pyr_output[0] = frame.clone();
 
