@@ -10,9 +10,7 @@
 #include <opencv2/core.hpp>
 #include <opencv2/videoio.hpp>
 #include <opencv2/imgproc.hpp>
-
 #include "opencv2/opencv_modules.hpp"
-
 #if defined (HAVE_OPENCV_CUDAIMGPROC)
 #include <opencv2/cudaimgproc.hpp>
 #endif
@@ -58,24 +56,24 @@ constexpr auto BAR_WIDTH = 70;
 * License : Please refer to the LICENCE file (MIT license)
 * Original date : June 2012
 **/
-int amplify_spatial_Gdown_temporal_ideal(string inFile, string outDir, double alpha,
-    int level, double fl, double fh, int samplingRate, double chromAttenuation)
+int amplify_spatial_Gdown_temporal_ideal(string inFile, string name, string outDir, float alpha,
+    int level, float fl, float fh, int samplingRate, float chromAttenuation)
 {   
     double itime, etime;
 
     itime = omp_get_wtime();
 
-    string name;
-    string delimiter = "/";
+    // string name;
+    // string delimiter = "/";
     string bar(BAR_WIDTH, '=');
 
-    size_t last = 0; size_t next = 0;
-    while ((next = inFile.find(delimiter, last)) != string::npos) {
-        last = next + 1;
-    }
+    // size_t last = 0; size_t next = 0;
+    // while ((next = inFile.find(delimiter, last)) != string::npos) {
+    //     last = next + 1;
+    // }
 
-    name = inFile.substr(last);
-    name = name.substr(0, name.find("."));
+    // name = inFile.substr(last);
+    // name = name.substr(0, name.find("."));
 
     cout << bar << endl;
     cout << "Processing " << inFile << "." << endl;
@@ -284,7 +282,7 @@ int amplify_spatial_Gdown_temporal_ideal(string inFile, string outDir, double al
 * License : Please refer to the LICENCE file (MIT license)
 * Original date : June 2012
 **/
-int amplify_spatial_lpyr_temporal_butter(string inFile, string outDir, double alpha, double lambda_c,
+int amplify_spatial_lpyr_temporal_butter(string inFile, string name, string outDir, double alpha, double lambda_c,
     double fl, double fh, int samplingRate, double chromAttenuation) {
 
     double itime, etime;
@@ -305,17 +303,17 @@ int amplify_spatial_lpyr_temporal_butter(string inFile, string outDir, double al
     Vec2f high_b(aa[0], aa[1]);
 
     // Out video preparation
-    string name;
-    string delimiter = "/";
+    // string name;
+    // string delimiter = "/";
     string bar(BAR_WIDTH, '=');
 
-    size_t last = 0; size_t next = 0;
-    while ((next = inFile.find(delimiter, last)) != string::npos) {
-        last = next + 1;
-    }
+    // size_t last = 0; size_t next = 0;
+    // while ((next = inFile.find(delimiter, last)) != string::npos) {
+    //     last = next + 1;
+    // }
 
-    name = inFile.substr(last);
-    name = name.substr(0, name.find("."));
+    // name = inFile.substr(last);
+    // name = name.substr(0, name.find("."));
 
     float progress = 0;
 
@@ -578,24 +576,24 @@ int amplify_spatial_lpyr_temporal_butter(string inFile, string outDir, double al
 * License : Please refer to the LICENCE file (MIT license)
 * Original date : June 2012
 */
-int amplify_spatial_lpyr_temporal_ideal(string inFile, string outDir, double alpha,
+int amplify_spatial_lpyr_temporal_ideal(string inFile, string name, string outDir, double alpha,
     double lambda_c, double fl, double fh, double samplingRate, double chromAttenuation) {
 
     double itime, etime;
 
     itime = omp_get_wtime();
 
-    string name;
-    string delimiter = "/";
+    // string name;
+    // string delimiter = "/";
     string bar(BAR_WIDTH, '=');
 
-    size_t last = 0; size_t next = 0;
-    while ((next = inFile.find(delimiter, last)) != string::npos) {
-        last = next + 1;
-    }
+    // size_t last = 0; size_t next = 0;
+    // while ((next = inFile.find(delimiter, last)) != string::npos) {
+    //     last = next + 1;
+    // }
 
-    name = inFile.substr(last);
-    name = name.substr(0, name.find("."));
+    // name = inFile.substr(last);
+    // name = name.substr(0, name.find("."));
 
     cout << bar << endl;
     cout << "Processing " << inFile << "." << endl;
@@ -800,24 +798,23 @@ int amplify_spatial_lpyr_temporal_ideal(string inFile, string outDir, double alp
 * License : Please refer to the LICENCE file (MIT license)
 * Original date : June 2012
 */
-int amplify_spatial_lpyr_temporal_iir(string inFile, string outDir, double alpha,
+int amplify_spatial_lpyr_temporal_iir(string inFile, string name, string outDir, double alpha,
     double lambda_c, double r1, double r2, double chromAttenuation) {
 
     double itime, etime;
 
     itime = omp_get_wtime();
 
-    string name;
-    string delimiter = "/";
+    // string name;
+    // string delimiter = "/";
 
-    size_t last = 0; size_t next = 0;
-    while ((next = inFile.find(delimiter, last)) != string::npos) {
-        last = next + 1;
-    }
+    // size_t last = 0; size_t next = 0;
+    // while ((next = inFile.find(delimiter, last)) != string::npos) {
+    //     last = next + 1;
+    // }
 
-    name = inFile.substr(last);
-    name = name.substr(0, name.find("."));
-    cout << name << endl;
+    // name = inFile.substr(last);
+    // name = name.substr(0, name.find("."));
 
     // Creates the result video name
     string outName = outDir + name + "-iir-r1-" + to_string(r1) + "-r2-" +
